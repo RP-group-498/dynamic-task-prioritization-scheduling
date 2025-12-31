@@ -1,15 +1,23 @@
 # Google Gemini API
 google-genai>=0.2.0
 
-# Machine Learning (for difficulty prediction models)
-scikit-learn>=1.3.0
-pandas>=2.0.0
-numpy>=1.24.0
-sentence-transformers>=2.2.0
+# --- Core Dependencies (from both projects) ---
+# Pinning to the more specific versions from adaptive_time_estimator
+scikit-learn==1.3.2
+pandas==2.0.3
+numpy==1.24.3
+sentence-transformers==2.3.1
+pymongo==4.6.1
+python-dotenv==1.0.0
 
-# Data handling
+# Data handling (from root)
 python-dateutil>=2.8.0
 
-# MongoDB Database
-pymongo>=4.6.0
-python-dotenv>=1.0.0
+# --- Optional Dependencies ---
+
+# Optional (for web API, from adaptive_time_estimator)
+flask==3.0.0
+flask-cors==4.0.0
+
+# Optional (for data analysis, from adaptive_time_estimator)
+matplotlib==3.7.2

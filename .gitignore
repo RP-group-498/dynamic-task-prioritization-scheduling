@@ -58,3 +58,6 @@ Backup/
 # Logs
 *.log
 logs/
+
+# Invalid files
+nul
