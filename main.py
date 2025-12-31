@@ -4,17 +4,17 @@ import datetime
 import json
 from pathlib import Path
 
-from src.pdf_extractor import GeminiPDFExtractor
-from src.difficulty_predictor import DifficultyPredictor
-from src.database import MongoDBHandler
-from src.mcdm_calculator import (
+from src.dynamic_task_prioritization.pdf_extractor import GeminiPDFExtractor
+from src.dynamic_task_prioritization.difficulty_predictor import DifficultyPredictor
+from src.dynamic_task_prioritization.database import MongoDBHandler
+from src.dynamic_task_prioritization.mcdm_calculator import (
     calculate_urgency_score,
     calculate_impact_score,
     calculate_difficulty_score,
     calculate_final_score,
     get_priority_label
 )
-from src.config import get_extraction_prompt, RAW_DATA_DIR, OUTPUTS_DIR, MONGODB_URI
+from src.dynamic_task_prioritization.config import get_extraction_prompt, RAW_DATA_DIR, OUTPUTS_DIR, MONGODB_URI
 
 
 def get_user_inputs():
