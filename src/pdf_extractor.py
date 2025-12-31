@@ -14,7 +14,18 @@ class GeminiPDFExtractor:
     def __init__(self):
         """Initialize Gemini client."""
         try:
-            self.client = genai.Client()
+            # --- START OF FIX ---
+            # 1. Retrieve the specific API key from your environment variables
+            api_key = os.environ.get("GEMINI_API_KEY")
+
+            # 2. Check if the key exists before trying to use it
+            if not api_key:
+                raise ValueError("GEMINI_API_KEY not found. Please check your System Environment Variables.")
+
+            # 3. Pass the key directly to the Client
+            self.client = genai.Client(api_key=api_key)
+            # --- END OF FIX ---
+
             print("Gemini client initialized successfully.")
         except Exception as e:
             print(f"Error initializing client: {e}. Check your GEMINI_API_KEY.")

@@ -1,10 +1,20 @@
 """Main application for MCDM-based task priority analysis."""
 
 import datetime
+import json
 from pathlib import Path
 
 from src.pdf_extractor import GeminiPDFExtractor
-from src.config import get_extraction_prompt, RAW_DATA_DIR, OUTPUTS_DIR
+from src.difficulty_predictor import DifficultyPredictor
+from src.database import MongoDBHandler
+from src.mcdm_calculator import (
+    calculate_urgency_score,
+    calculate_impact_score,
+    calculate_difficulty_score,
+    calculate_final_score,
+    get_priority_label
+)
+from src.config import get_extraction_prompt, RAW_DATA_DIR, OUTPUTS_DIR, MONGODB_URI
 
 
 def get_user_inputs():
@@ -107,14 +117,17 @@ def main():
     # Get PDF file
     pdf_file = get_pdf_file()
 
-    # Initialize extractor
+    # Initialize Gemini extractor
     try:
         extractor = GeminiPDFExtractor()
     except Exception as e:
         print(f"\nFailed to initialize Gemini client. Exiting.")
         return
 
-    # Generate prompt
+    # Initialize ML difficulty predictor
+    predictor = DifficultyPredictor()
+
+    # Generate extraction prompt
     today_date_str = datetime.date.today().strftime("%Y-%m-%d")
     prompt = get_extraction_prompt(
         deadline_input=deadline_input,
@@ -124,25 +137,128 @@ def main():
         today_date_str=today_date_str
     )
 
-    # Extract content
+    # Step 1: Extract content from PDF using Gemini
     try:
         print("\n" + "=" * 60)
-        extracted_content = extractor.extract_text_from_pdf(str(pdf_file), prompt)
+        print("Step 1: Extracting content from PDF using Gemini API...")
+        extracted_json = extractor.extract_text_from_pdf(str(pdf_file), prompt)
 
-        print("\n--- MCDM Analysis Result ---")
-        print(extracted_content)
+        # Parse JSON response
+        try:
+            # Clean the response (remove markdown code blocks if present)
+            cleaned_json = extracted_json.strip()
+            if cleaned_json.startswith("```json"):
+                cleaned_json = cleaned_json.split("```json")[1].split("```")[0].strip()
+            elif cleaned_json.startswith("```"):
+                cleaned_json = cleaned_json.split("```")[1].split("```")[0].strip()
 
-        # Save output
+            extracted_data = json.loads(cleaned_json)
+            print("✓ Successfully parsed extraction data")
+
+            # Display extracted information
+            print(f"\n--- Extracted Task Information ---")
+            print(f"Task Name: {extracted_data.get('task_name', 'N/A')}")
+            print(f"Task Description: {extracted_data.get('task_description', 'N/A')}")
+            print(f"Number of Subtasks: {len(extracted_data.get('sub_tasks', []))}")
+            print(f"Context Available: {'Yes' if extracted_data.get('context') else 'No'}")
+
+        except json.JSONDecodeError as e:
+            print(f"\nError: Failed to parse JSON from Gemini: {e}")
+            print(f"Raw response:\n{extracted_json}")
+            return
+
+        # Step 2: Predict difficulty using ML model
+        print("\nStep 2: Predicting difficulty using ML model...")
+        task_description = extracted_data.get("task_description", "")
+        difficulty_rating = predictor.predict_difficulty(task_description)
+
+        # Step 3: Calculate MCDM scores
+        print("\nStep 3: Calculating MCDM scores...")
+        urgency_score = calculate_urgency_score(days_left)
+        impact_score = calculate_impact_score(credits, weight)
+        difficulty_score = calculate_difficulty_score(difficulty_rating)
+        final_score = calculate_final_score(urgency_score, impact_score, difficulty_score)
+        priority_label = get_priority_label(final_score)
+
+        print(f"  → Urgency Score: {urgency_score}/100 ({days_left} days left)")
+        print(f"  → Impact Score: {impact_score}/100 ({credits} credits × {weight}%)")
+        print(f"  → Difficulty Score: {difficulty_score}/100 (ML rating: {difficulty_rating}/5)")
+        print(f"  → Final MCDM Score: {final_score:.1f}/100")
+        print(f"  → Priority: {priority_label}")
+
+        # Step 4: Build final output JSON
+        task_data = {
+            "task_name": extracted_data.get("task_name", "Unknown Task"),
+            "task_description": extracted_data.get("task_description", ""),
+            "sub_tasks": extracted_data.get("sub_tasks", []),
+            "context": extracted_data.get("context", ""),
+            "metrics": {
+                "deadline": deadline_input,
+                "days_left": days_left,
+                "credits": credits,
+                "percentage": weight,
+                "difficulty_rating": difficulty_rating
+            },
+            "mcdm_calculation": {
+                "urgency_score": urgency_score,
+                "impact_score": impact_score,
+                "difficulty_score": difficulty_score,
+                "final_weighted_score": round(final_score, 2)
+            },
+            "priority": priority_label
+        }
+
+        final_output = {
+            "tasks": [task_data]
+        }
+
+        # Step 5: Display and save results
+        print("\n" + "=" * 60)
+        print("FINAL MCDM ANALYSIS RESULT")
+        print("=" * 60)
+        print(json.dumps(final_output, indent=2, ensure_ascii=False))
+
+        # Save to JSON file
         OUTPUTS_DIR.mkdir(parents=True, exist_ok=True)
         output_file = OUTPUTS_DIR / "mcdm_output.json"
 
         with open(output_file, "w", encoding="utf-8") as f:
-            f.write(extracted_content)
+            json.dump(final_output, f, indent=2, ensure_ascii=False)
 
-        print(f"\n✅ MCDM Data saved to: {output_file}")
+        print(f"\n✅ MCDM Data saved to JSON: {output_file}")
+
+        # Step 6: Save to MongoDB
+        try:
+            print("\n" + "=" * 60)
+            print("Saving to MongoDB...")
+            print("=" * 60)
+
+            db_handler = MongoDBHandler(MONGODB_URI)
+            task_id = db_handler.save_task(task_data)
+
+            print(f"✅ Task successfully saved to MongoDB!")
+            print(f"   Database: {db_handler.db.name}")
+            print(f"   Collection: {db_handler.tasks_collection.name}")
+            print(f"   Document ID: {task_id}")
+
+            # Display statistics
+            stats = db_handler.get_task_statistics()
+            print(f"\n📊 Database Statistics:")
+            print(f"   Total Tasks: {stats.get('total_tasks', 0)}")
+            print(f"   High Priority: {stats.get('high_priority', 0)}")
+            print(f"   Medium Priority: {stats.get('medium_priority', 0)}")
+            print(f"   Low Priority: {stats.get('low_priority', 0)}")
+
+            db_handler.close()
+
+        except Exception as e:
+            print(f"\n⚠️  Warning: Failed to save to MongoDB: {e}")
+            print("   Data has been saved to JSON file only.")
 
     except Exception as e:
         print(f"\nError: {e}")
+        import traceback
+        traceback.print_exc()
 
 
 if __name__ == "__main__":

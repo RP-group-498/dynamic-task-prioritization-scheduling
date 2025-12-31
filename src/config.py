@@ -2,6 +2,10 @@
 
 import os
 from pathlib import Path
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 
 # Project paths
 PROJECT_ROOT = Path(__file__).parent.parent
@@ -11,7 +15,12 @@ RAW_DATA_DIR = DATA_DIR / "raw"
 OUTPUTS_DIR = DATA_DIR / "outputs"
 
 # Gemini API configuration
-GEMINI_MODEL = "gemini-2.5-pro"
+GEMINI_MODEL = "gemini-2.5-flash"
+
+# MongoDB configuration
+MONGODB_URI = os.getenv("MONGODB_URI")
+MONGODB_DATABASE = "research_task_db"
+MONGODB_COLLECTION = "tasks"
 
 # MCDM weights
 URGENCY_WEIGHT = 0.50
@@ -21,7 +30,7 @@ DIFFICULTY_WEIGHT = 0.20
 
 def get_extraction_prompt(deadline_input: str, user_days_left: int, user_credits: int, user_weight: int, today_date_str: str) -> str:
     """
-    Generate the MCDM extraction prompt for Gemini API.
+    Generate the extraction prompt for Gemini API to extract task information from PDF.
 
     Args:
         deadline_input: Deadline date string (YYYY-MM-DD)
@@ -34,72 +43,37 @@ def get_extraction_prompt(deadline_input: str, user_days_left: int, user_credits
         Formatted prompt string for Gemini API
     """
     return f"""
-    Read this PDF. You are a Decision Support System using Multi-Criteria Decision Making (MCDM).
+    You are an intelligent PDF task extraction system. Read this assignment/task PDF carefully and extract the following information:
 
-    Current Date: {today_date_str}
+    **Your Goal:**
+    1. Extract the main task/assignment name or title
+    2. Extract the task description as a SIMPLE ONE-LINE QUESTION (e.g., "What algorithm should be implemented?", "How to design a database schema?")
+    3. Extract all subtasks or requirements listed in the document
+    4. Extract any additional context or notes
 
-    **CONTEXT (Provided by User - USE THESE EXACT NUMBERS):**
-    - Deadline: {deadline_input}
-    - Calculated Days_Left: {user_days_left}
-    - Module_Credits: {user_credits}
-    - Assignment_Percentage: {user_weight}
-
-    **Goal:** Extract the Task Name/Subtasks from the PDF, determine Difficulty based on the text, and calculate the Priority Score using the provided numbers.
-
-    **Step 1: Normalize Criteria (Using User Data)**
-    1. **Urgency (U):** Use calculated 'Days_Left' ({user_days_left}).
-       - If {user_days_left} <= 1: U=100
-       - If {user_days_left} <= 3: U=80
-       - If {user_days_left} <= 7: U=60
-       - If {user_days_left} <= 14: U=40
-       - Else: U=20
-
-    2. **Impact (I) - ADVANCED HYBRID LOGIC:**
-       - Calculate Raw_Impact = {user_credits} * ({user_weight}/100).
-       - **Conditional Conditions:**
-         - IF Raw_Impact >= 2.0: Set I = 100 (Maximum Critical)
-         - IF Raw_Impact >= 1.5: Set I = 90  (Very High)
-         - IF Raw_Impact >= 1.0: Set I = 75  (High)
-         - IF Raw_Impact >= 0.5: Set I = 50  (Moderate)
-         - IF Raw_Impact < 0.2:  Set I = 10  (Negligible)
-         - **ELSE (For in-between values):** Use Formula: I = Raw_Impact * 50
-
-    3. **Difficulty (D):** READ THE PDF TEXT. Estimate 1-5 based on complexity.
-       - Look for verbs like 'Analyze', 'Prove', 'Implement' -> Higher Difficulty.
-       - Look for 'List', 'Describe' -> Lower Difficulty.
-       - Normalize D: (Difficulty * 20).
-
-    **Step 2: Calculate MCDM Score**
-    Formula: Final_Score = (U * 0.50) + (I * 0.30) + (D * 0.20)
-
-    **Step 3: Assign Label**
-    - If Final_Score >= 70 -> Priority: "High"
-    - If Final_Score >= 40 -> Priority: "Medium"
-    - Else -> Priority: "Low"
+    **Instructions:**
+    - Extract the EXACT text from the PDF wherever possible
+    - For task_name: Use the main assignment title or question
+    - For task_description: Write a clear, simple ONE-LINE QUESTION that summarizes what needs to be done (this will be used for difficulty analysis)
+    - For sub_tasks: List ALL subtasks, requirements, or deliverables mentioned in the PDF
+    - For context: Include any important notes, constraints, or additional information
 
     **Output Format (Strict JSON):**
     {{
-      "tasks": [
-        {{
-          "task_name": "Understand the assigment and  Use the main Question Text exactly as written in the PDF as example Given an array of integers numsÂ and an integer target, return indices of the two numbers such that they add up to target. You may assume that each input would have exactly one solution, and you may not use the same element twice. You can return the answer in any order. ",
-          "sub_tasks": ["Extract all subtasks exactly as listed in the PDF"],
-          "metrics": {{
-            "deadline": "{deadline_input}",
-            "days_left": {user_days_left},
-            "credits": {user_credits},
-            "percentage": {user_weight},
-            "difficulty_rating": "AI Estimated (1-5)"
-          }},
-          "mcdm_calculation": {{
-            "urgency_score": Int,
-            "impact_score_calculated": Int,
-            "difficulty_score": Int,
-            "final_weighted_score": Float
-          }},
-          "priority": "High/Medium/Low"
-        }}
-      ]
+      "task_name": "The main assignment title or question from the PDF",
+      "task_description": "A simple one-line question that describes what needs to be done (e.g., 'What is the implementation of Binary Search Tree?')",
+      "sub_tasks": [
+        "First subtask or requirement",
+        "Second subtask or requirement",
+        "Third subtask or requirement"
+      ],
+      "context": "Any additional notes, constraints, or important information from the PDF"
     }}
+
+    **Important:**
+    - Return ONLY valid JSON (no markdown, no code blocks, no extra text)
+    - Ensure all strings are properly escaped
+    - If a field is not found in the PDF, use an empty string "" or empty array []
 
     Return ONLY the raw JSON.
     """
