@@ -6,24 +6,23 @@
 }
 
 :root {
-    --primary-color: #4CAF50;
-    --secondary-color: #2196F3;
-    --danger-color: #f44336;
-    --warning-color: #ff9800;
-    --success-color: #4CAF50;
-    --dark-bg: #1a1a1a;
-    --card-bg: #2d2d2d;
-    --text-primary: #ffffff;
-    --text-secondary: #b0b0b0;
-    --border-color: #404040;
-    --high-priority: #f44336;
-    --medium-priority: #ff9800;
-    --low-priority: #4CAF50;
+    --primary-color: #6f42c1;
+    --secondary-color: #6c757d;
+    --danger-color: #dc3545;
+    --warning-color: #ffc107;
+    --success-color: #28a745;
+    --dark-bg: #f8f9fa;
+    --card-bg: #ffffff;
+    --text-primary: #212529;
+    --text-secondary: #6c757d;
+    --border-color: #dee2e6;
+    --high-priority: #dc3545;
+    --medium-priority: #ffc107;
+    --low-priority: #28a745;
 }
-
 body {
     font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-    background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%);
+    background: var(--dark-bg);
     color: var(--text-primary);
     min-height: 100vh;
     line-height: 1.6;

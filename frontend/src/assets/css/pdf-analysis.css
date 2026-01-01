@@ -12,12 +12,12 @@
 
 .upload-area:hover {
     border-color: var(--primary-color);
-    background: rgba(76, 175, 80, 0.05);
+    background: rgba(111, 66, 193, 0.05);
 }
 
 .upload-area.dragover {
     border-color: var(--primary-color);
-    background: rgba(76, 175, 80, 0.1);
+    background: rgba(111, 66, 193, 0.1);
 }
 
 .upload-icon {
@@ -37,7 +37,7 @@
     justify-content: space-between;
     align-items: center;
     padding: 1rem;
-    background: rgba(76, 175, 80, 0.1);
+    background: rgba(111, 66, 193, 0.1);
     border: 1px solid var(--primary-color);
     border-radius: 8px;
     margin-top: 1rem;
@@ -136,15 +136,15 @@
 }
 
 .score-fill.urgency {
-    background: linear-gradient(90deg, #f44336, #ff5722);
+    background: var(--danger-color);
 }
 
 .score-fill.impact {
-    background: linear-gradient(90deg, #2196F3, #03A9F4);
+    background: var(--primary-color);
 }
 
 .score-fill.difficulty {
-    background: linear-gradient(90deg, #ff9800, #FFC107);
+    background: var(--warning-color);
 }
 
 .score-value {

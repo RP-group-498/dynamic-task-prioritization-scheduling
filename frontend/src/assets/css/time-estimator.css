@@ -69,12 +69,12 @@
 }
 
 .calendar-day:hover {
-    background: rgba(76, 175, 80, 0.1);
+    background: rgba(111, 66, 193, 0.1);
     border-color: var(--primary-color);
 }
 
 .calendar-day.today {
-    background: rgba(76, 175, 80, 0.2);
+    background: rgba(111, 66, 193, 0.2);
     border-color: var(--primary-color);
     font-weight: bold;
 }
@@ -117,7 +117,7 @@
 
 .stat-card:hover {
     transform: translateY(-5px);
-    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
 }
 
 .stat-card.high {
@@ -185,7 +185,7 @@
 }
 
 .filter-btn:hover {
-    background: rgba(76, 175, 80, 0.1);
+    background: rgba(111, 66, 193, 0.1);
     color: var(--text-primary);
 }
 
@@ -214,7 +214,7 @@
 }
 
 .todo-item:hover {
-    background: rgba(76, 175, 80, 0.05);
+    background: rgba(111, 66, 193, 0.05);
     transform: translateX(5px);
 }
 
@@ -344,7 +344,7 @@
 
 .workload-fill {
     height: 100%;
-    background: linear-gradient(90deg, var(--success-color), var(--warning-color), var(--danger-color));
+    background: var(--primary-color);
     border-radius: 15px;
     transition: width 0.5s ease;
 }
@@ -381,7 +381,7 @@
     top: 0;
     width: 100%;
     height: 100%;
-    background-color: rgba(0, 0, 0, 0.7);
+    background-color: rgba(0, 0, 0, 0.5);
     overflow: auto;
 }
 
@@ -393,7 +393,7 @@
     border-radius: 12px;
     width: 90%;
     max-width: 700px;
-    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1);
     animation: modalSlideIn 0.3s ease;
 }
 
@@ -537,17 +537,17 @@
 }
 
 .status-badge.scheduled {
-    background: rgba(33, 150, 243, 0.2);
-    color: #2196F3;
+    background: rgba(108, 117, 125, 0.2);
+    color: var(--secondary-color);
 }
 
 .status-badge.in-progress {
-    background: rgba(255, 152, 0, 0.2);
-    color: #FF9800;
+    background: rgba(255, 193, 7, 0.2);
+    color: var(--warning-color);
 }
 
 .status-badge.completed {
-    background: rgba(76, 175, 80, 0.2);
+    background: rgba(40, 167, 69, 0.2);
     color: var(--success-color);
 }
 
