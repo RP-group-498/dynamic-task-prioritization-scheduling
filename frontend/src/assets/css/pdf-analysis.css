@@ -1,0 +1,224 @@
+/* PDF Analysis Page Specific Styles */
+
+/* Upload Area */
+.upload-area {
+    border: 2px dashed var(--border-color);
+    border-radius: 10px;
+    padding: 3rem;
+    text-align: center;
+    transition: all 0.3s ease;
+    cursor: pointer;
+}
+
+.upload-area:hover {
+    border-color: var(--primary-color);
+    background: rgba(76, 175, 80, 0.05);
+}
+
+.upload-area.dragover {
+    border-color: var(--primary-color);
+    background: rgba(76, 175, 80, 0.1);
+}
+
+.upload-icon {
+    font-size: 4rem;
+    margin-bottom: 1rem;
+}
+
+.upload-text {
+    color: var(--text-secondary);
+    margin-bottom: 1.5rem;
+    font-size: 1.1rem;
+}
+
+/* File Info */
+.file-info {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1rem;
+    background: rgba(76, 175, 80, 0.1);
+    border: 1px solid var(--primary-color);
+    border-radius: 8px;
+    margin-top: 1rem;
+}
+
+.file-name {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    color: var(--text-primary);
+    font-weight: 500;
+}
+
+.file-name::before {
+    content: "📄";
+    font-size: 1.5rem;
+}
+
+/* Results Container */
+.results-container {
+    display: grid;
+    gap: 1.5rem;
+}
+
+.result-section {
+    padding: 1.5rem;
+    background: var(--dark-bg);
+    border-radius: 8px;
+    border: 1px solid var(--border-color);
+}
+
+.result-section h4 {
+    color: var(--primary-color);
+    margin-bottom: 1rem;
+    font-size: 1.2rem;
+    border-bottom: 1px solid var(--border-color);
+    padding-bottom: 0.5rem;
+}
+
+/* Info Grid */
+.info-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1rem;
+}
+
+.info-item {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.info-label {
+    color: var(--text-secondary);
+    font-size: 0.875rem;
+    font-weight: 500;
+}
+
+.info-value {
+    color: var(--text-primary);
+    font-size: 1.1rem;
+    font-weight: 600;
+}
+
+/* Scores Container */
+.scores-container {
+    display: grid;
+    gap: 1rem;
+}
+
+.score-item {
+    display: grid;
+    grid-template-columns: 120px 1fr 60px;
+    align-items: center;
+    gap: 1rem;
+}
+
+.score-label {
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+    font-weight: 500;
+}
+
+.score-bar {
+    height: 25px;
+    background: var(--dark-bg);
+    border-radius: 12px;
+    overflow: hidden;
+    border: 1px solid var(--border-color);
+}
+
+.score-fill {
+    height: 100%;
+    transition: width 0.5s ease;
+    border-radius: 12px;
+}
+
+.score-fill.urgency {
+    background: linear-gradient(90deg, #f44336, #ff5722);
+}
+
+.score-fill.impact {
+    background: linear-gradient(90deg, #2196F3, #03A9F4);
+}
+
+.score-fill.difficulty {
+    background: linear-gradient(90deg, #ff9800, #FFC107);
+}
+
+.score-value {
+    text-align: right;
+    color: var(--text-primary);
+    font-weight: 600;
+    font-size: 1rem;
+}
+
+.score-value.large {
+    font-size: 2rem;
+    color: var(--primary-color);
+}
+
+.score-item.final-score {
+    grid-template-columns: 1fr auto;
+    margin-top: 1rem;
+    padding-top: 1rem;
+    border-top: 2px solid var(--border-color);
+}
+
+/* Subtasks List */
+.subtasks-list {
+    list-style: none;
+    display: grid;
+    gap: 0.75rem;
+}
+
+.subtasks-list li {
+    padding: 0.75rem 1rem;
+    background: var(--card-bg);
+    border-left: 3px solid var(--primary-color);
+    border-radius: 5px;
+    color: var(--text-primary);
+    transition: transform 0.2s ease;
+}
+
+.subtasks-list li:hover {
+    transform: translateX(5px);
+}
+
+.subtasks-list li::before {
+    content: "✓";
+    color: var(--primary-color);
+    margin-right: 0.75rem;
+    font-weight: bold;
+}
+
+/* Task Description */
+.task-description {
+    color: var(--text-secondary);
+    line-height: 1.8;
+    padding: 1rem;
+    background: var(--card-bg);
+    border-radius: 5px;
+    border-left: 3px solid var(--secondary-color);
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+    .form-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .info-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .score-item {
+        grid-template-columns: 1fr;
+        gap: 0.5rem;
+    }
+
+    .score-value {
+        text-align: left;
+    }
+}

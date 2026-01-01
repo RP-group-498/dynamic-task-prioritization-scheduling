@@ -184,9 +184,10 @@ class AdaptiveTimeEstimator:
                     "confidence": pred['confidence']
                 },
                 "status": "scheduled",
-                "created_date": datetime.now()
+                "created_date": datetime.now(),
+                "time_allocation_date": pred.get('time_allocation_date', None)
             }
-            
+
             self.tasks.insert_one(doc)
     
     

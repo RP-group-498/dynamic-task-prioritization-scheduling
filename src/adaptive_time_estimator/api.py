@@ -25,7 +25,7 @@ CORS(app)  # Enable CORS for frontend access
 
 # Initialize estimator (loads once at startup)
 print("Initializing model...")
-estimator = AdaptiveTimeEstimator('../config/.env', '../models/sbert_model')
+estimator = AdaptiveTimeEstimator('.env', 'models/sbert_model')
 print("Model ready!")
 
 
@@ -41,6 +41,8 @@ def home():
             "POST /predict-batch": "Predict multiple tasks at once",
             "POST /complete": "Mark task as complete",
             "GET /accuracy/<user_id>": "Get model accuracy for user",
+            "GET /tasks/<user_id>": "Get all tasks for a user",
+            "POST /save-tasks": "Save tasks to database",
             "GET /health": "Check API health"
         }
     })
@@ -225,7 +227,7 @@ def get_accuracy(user_id):
 def save_tasks():
     """
     Save multiple tasks to database
-    
+
     Request body:
     {
         "user_id": "student_123",
@@ -235,19 +237,120 @@ def save_tasks():
     """
     try:
         data = request.json
-        
+
         estimator.save_task(
             data['main_task'],
             data['predictions'],
             data['user_id']
         )
-        
+
         return jsonify({
             "status": "saved",
             "task_count": len(data['predictions']),
             "timestamp": datetime.now().isoformat()
         })
-        
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route('/tasks/<user_id>', methods=['GET'])
+def get_user_tasks(user_id):
+    """
+    Get all tasks for a specific user
+
+    Query parameters:
+        status: Filter by status (scheduled, in_progress, completed) - optional
+        limit: Maximum number of tasks to return - optional (default: all)
+
+    Response:
+    {
+        "user_id": "student_123",
+        "tasks": [
+            {
+                "task_id": "...",
+                "main_task": {
+                    "name": "Database Homework",
+                    "difficulty": 3
+                },
+                "subtask": "Create login page",
+                "predicted_time": 14,
+                "actual_time": null,
+                "status": "scheduled",
+                "created_date": "2025-01-01T12:00:00",
+                "confidence": "HIGH",
+                "method": "warm_start"
+            }
+        ],
+        "task_count": 5,
+        "total_estimated_time": 120
+    }
+    """
+    try:
+        # Get query parameters
+        status_filter = request.args.get('status')
+        limit = request.args.get('limit', type=int)
+
+        # Build query
+        query = {"user_id": user_id}
+        if status_filter:
+            query["status"] = status_filter
+
+        # Fetch tasks from database
+        tasks_cursor = estimator.tasks.find(query).sort("created_date", -1)
+
+        if limit:
+            tasks_cursor = tasks_cursor.limit(limit)
+
+        tasks = list(tasks_cursor)
+
+        # Format response
+        formatted_tasks = []
+        total_estimated_time = 0
+
+        for task in tasks:
+            estimates = task.get('estimates', {})
+            sub_task = task.get('sub_task', {})
+
+            # Handle time_allocation_date
+            time_alloc = task.get('time_allocation_date')
+            time_allocation_str = None
+            if time_alloc:
+                if isinstance(time_alloc, datetime):
+                    time_allocation_str = time_alloc.isoformat()
+                else:
+                    time_allocation_str = time_alloc
+
+            formatted_task = {
+                "task_id": str(task['_id']),
+                "main_task": task.get('main_task', {}),
+                "subtask": sub_task.get('description', 'Unknown'),
+                "subtask_position": sub_task.get('position', 1),
+                "category": sub_task.get('category', 'general'),
+                "predicted_time": estimates.get('system_estimate', 0),
+                "user_estimate": estimates.get('user_estimate'),
+                "actual_time": estimates.get('actual_time'),
+                "confidence": estimates.get('confidence', 'UNKNOWN'),
+                "method": estimates.get('prediction_method', 'unknown'),
+                "status": task.get('status', 'scheduled'),
+                "created_date": task.get('created_date', datetime.now()).isoformat(),
+                "completed_date": task.get('completed_date', '').isoformat() if task.get('completed_date') else None,
+                "time_allocation_date": time_allocation_str
+            }
+            formatted_tasks.append(formatted_task)
+
+            # Only count incomplete tasks
+            if task.get('status') != 'completed':
+                total_estimated_time += estimates.get('system_estimate', 0)
+
+        return jsonify({
+            "user_id": user_id,
+            "tasks": formatted_tasks,
+            "task_count": len(formatted_tasks),
+            "total_estimated_time": total_estimated_time,
+            "timestamp": datetime.now().isoformat()
+        })
+
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
@@ -264,7 +367,8 @@ if __name__ == '__main__':
     print("  POST /predict-batch - Multiple predictions")
     print("  POST /complete      - Mark task complete")
     print("  GET  /accuracy/<id> - Get accuracy")
+    print("  GET  /tasks/<id>    - Get all user tasks")
     print("  POST /save-tasks    - Save tasks")
     print("\n" + "="*60 + "\n")
-    
+
     app.run(debug=True, host='0.0.0.0', port=5000)

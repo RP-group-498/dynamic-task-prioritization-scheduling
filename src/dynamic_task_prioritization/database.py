@@ -33,7 +33,7 @@ class MongoDBHandler:
             self.client = MongoClient(self.connection_string, serverSelectionTimeoutMS=5000)
             # Test connection
             self.client.admin.command('ping')
-            print("✓ Successfully connected to MongoDB")
+            print("[OK] Successfully connected to MongoDB")
 
             # Set database and collection
             self.db = self.client['research_task_db']
@@ -106,7 +106,7 @@ class MongoDBHandler:
             # Insert into MongoDB
             result = self.tasks_collection.insert_one(task_data)
 
-            print(f"✓ Task saved to MongoDB with ID: {result.inserted_id}")
+            print(f"[OK] Task saved to MongoDB with ID: {result.inserted_id}")
             return str(result.inserted_id)
 
         except PyMongoError as e:
@@ -136,7 +136,7 @@ class MongoDBHandler:
             result = self.tasks_collection.insert_many(tasks_data)
 
             inserted_ids = [str(id) for id in result.inserted_ids]
-            print(f"✓ {len(inserted_ids)} tasks saved to MongoDB")
+            print(f"[OK] {len(inserted_ids)} tasks saved to MongoDB")
             return inserted_ids
 
         except PyMongoError as e:
@@ -232,7 +232,7 @@ class MongoDBHandler:
             result = self.tasks_collection.delete_one({"_id": ObjectId(task_id)})
 
             if result.deleted_count > 0:
-                print(f"✓ Task {task_id} deleted successfully")
+                print(f"[OK] Task {task_id} deleted successfully")
                 return True
             else:
                 print(f"Warning: No task found with ID {task_id}")
@@ -270,4 +270,4 @@ class MongoDBHandler:
         """Close MongoDB connection."""
         if self.client:
             self.client.close()
-            print("✓ MongoDB connection closed")
+            print("[OK] MongoDB connection closed")

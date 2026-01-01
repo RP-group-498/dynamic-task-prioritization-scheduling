@@ -1,5 +1,6 @@
 """Main application for MCDM-based task priority analysis."""
 
+import argparse
 import datetime
 import json
 from pathlib import Path
@@ -107,15 +108,49 @@ def get_pdf_file():
 
 def main():
     """Main application entry point."""
-    print("=" * 60)
-    print("MCDM Task Priority Analysis System")
-    print("=" * 60)
+    # Parse command-line arguments
+    parser = argparse.ArgumentParser(description='MCDM Task Priority Analysis System')
+    parser.add_argument('--input', type=str, help='Path to input JSON file (for Electron frontend)')
+    args = parser.parse_args()
 
-    # Get user inputs
-    deadline_date, credits, weight, days_left, deadline_input = get_user_inputs()
+    # Check if running in automated mode (from Electron) or manual mode
+    if args.input:
+        # AUTOMATED MODE: Read from JSON input file
+        print("Running in automated mode (Electron frontend)...")
+        try:
+            with open(args.input, 'r', encoding='utf-8') as f:
+                input_data = json.load(f)
 
-    # Get PDF file
-    pdf_file = get_pdf_file()
+            pdf_file = Path(input_data['pdf_path'])
+            deadline_input = input_data['deadline']
+            credits = int(input_data['credits'])
+            weight = int(input_data['weight'])
+
+            # Calculate deadline and days left
+            deadline_date = datetime.datetime.strptime(deadline_input, "%Y-%m-%d").date()
+            today = datetime.date.today()
+            days_left = (deadline_date - today).days
+
+            print(f"PDF: {pdf_file}")
+            print(f"Deadline: {deadline_input} ({days_left} days left)")
+            print(f"Credits: {credits}, Weight: {weight}%")
+
+        except Exception as e:
+            print(f"Error reading input file: {e}")
+            import traceback
+            traceback.print_exc()
+            return
+    else:
+        # MANUAL MODE: Interactive prompts
+        print("=" * 60)
+        print("MCDM Task Priority Analysis System")
+        print("=" * 60)
+
+        # Get user inputs
+        deadline_date, credits, weight, days_left, deadline_input = get_user_inputs()
+
+        # Get PDF file
+        pdf_file = get_pdf_file()
 
     # Initialize Gemini extractor
     try:
@@ -153,7 +188,7 @@ def main():
                 cleaned_json = cleaned_json.split("```")[1].split("```")[0].strip()
 
             extracted_data = json.loads(cleaned_json)
-            print("✓ Successfully parsed extraction data")
+            print("[OK] Successfully parsed extraction data")
 
             # Display extracted information
             print(f"\n--- Extracted Task Information ---")
@@ -180,11 +215,11 @@ def main():
         final_score = calculate_final_score(urgency_score, impact_score, difficulty_score)
         priority_label = get_priority_label(final_score)
 
-        print(f"  → Urgency Score: {urgency_score}/100 ({days_left} days left)")
-        print(f"  → Impact Score: {impact_score}/100 ({credits} credits × {weight}%)")
-        print(f"  → Difficulty Score: {difficulty_score}/100 (ML rating: {difficulty_rating}/5)")
-        print(f"  → Final MCDM Score: {final_score:.1f}/100")
-        print(f"  → Priority: {priority_label}")
+        print(f"  -> Urgency Score: {urgency_score}/100 ({days_left} days left)")
+        print(f"  -> Impact Score: {impact_score}/100 ({credits} credits x {weight}%)")
+        print(f"  -> Difficulty Score: {difficulty_score}/100 (ML rating: {difficulty_rating}/5)")
+        print(f"  -> Final MCDM Score: {final_score:.1f}/100")
+        print(f"  -> Priority: {priority_label}")
 
         # Step 4: Build final output JSON
         task_data = {
@@ -225,7 +260,7 @@ def main():
         with open(output_file, "w", encoding="utf-8") as f:
             json.dump(final_output, f, indent=2, ensure_ascii=False)
 
-        print(f"\n✅ MCDM Data saved to JSON: {output_file}")
+        print(f"\n[SUCCESS] MCDM Data saved to JSON: {output_file}")
 
         # Step 6: Save to MongoDB
         try:
@@ -236,14 +271,14 @@ def main():
             db_handler = MongoDBHandler(MONGODB_URI)
             task_id = db_handler.save_task(task_data)
 
-            print(f"✅ Task successfully saved to MongoDB!")
+            print(f"[SUCCESS] Task successfully saved to MongoDB!")
             print(f"   Database: {db_handler.db.name}")
             print(f"   Collection: {db_handler.tasks_collection.name}")
             print(f"   Document ID: {task_id}")
 
             # Display statistics
             stats = db_handler.get_task_statistics()
-            print(f"\n📊 Database Statistics:")
+            print(f"\n[STATS] Database Statistics:")
             print(f"   Total Tasks: {stats.get('total_tasks', 0)}")
             print(f"   High Priority: {stats.get('high_priority', 0)}")
             print(f"   Medium Priority: {stats.get('medium_priority', 0)}")
@@ -252,7 +287,7 @@ def main():
             db_handler.close()
 
         except Exception as e:
-            print(f"\n⚠️  Warning: Failed to save to MongoDB: {e}")
+            print(f"\n[WARNING] Failed to save to MongoDB: {e}")
             print("   Data has been saved to JSON file only.")
 
     except Exception as e:
