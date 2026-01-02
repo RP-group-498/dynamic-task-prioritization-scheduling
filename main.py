@@ -18,6 +18,34 @@ from src.dynamic_task_prioritization.mcdm_calculator import (
 from src.dynamic_task_prioritization.config import get_extraction_prompt, RAW_DATA_DIR, OUTPUTS_DIR, MONGODB_URI
 
 
+def format_time(minutes):
+    """
+    Format time in minutes to human-readable format.
+
+    Args:
+        minutes: Time in minutes (integer)
+
+    Returns:
+        Formatted time string (e.g., "2 hours 30 minutes", "45 minutes", "1 hour")
+    """
+    if minutes == 0:
+        return "0 minutes"
+
+    hours = minutes // 60
+    mins = minutes % 60
+
+    if hours > 0 and mins > 0:
+        hour_str = "hour" if hours == 1 else "hours"
+        min_str = "minute" if mins == 1 else "minutes"
+        return f"{hours} {hour_str} {mins} {min_str}"
+    elif hours > 0:
+        hour_str = "hour" if hours == 1 else "hours"
+        return f"{hours} {hour_str}"
+    else:
+        min_str = "minute" if mins == 1 else "minutes"
+        return f"{mins} {min_str}"
+
+
 def get_user_inputs():
     """
     Collect user inputs for MCDM analysis.
@@ -195,7 +223,29 @@ def main():
             print(f"Task Name: {extracted_data.get('task_name', 'N/A')}")
             print(f"Task Description: {extracted_data.get('task_description', 'N/A')}")
             print(f"Number of Subtasks: {len(extracted_data.get('sub_tasks', []))}")
-            print(f"Context Available: {'Yes' if extracted_data.get('context') else 'No'}")
+
+            # Display subtasks with AI estimated time
+            subtasks = extracted_data.get('sub_tasks', [])
+            if subtasks:
+                print("\nSubtasks with AI Estimated Time:")
+                total_subtask_minutes = 0
+                for idx, subtask in enumerate(subtasks, 1):
+                    if isinstance(subtask, dict):
+                        subtask_name = subtask.get('name', 'Unnamed subtask')
+                        # Support both new (estimated_minutes) and old (estimated_hours) formats
+                        subtask_minutes = subtask.get('estimated_minutes')
+                        if subtask_minutes is None:
+                            # Fallback to old format (hours) and convert to minutes
+                            subtask_hours = subtask.get('estimated_hours', 0)
+                            subtask_minutes = subtask_hours * 60
+                        total_subtask_minutes += subtask_minutes
+                        print(f"  {idx}. {subtask_name} - {format_time(subtask_minutes)}")
+                    else:
+                        # Handle old format (plain strings) for backward compatibility
+                        print(f"  {idx}. {subtask} - No time estimate")
+                print(f"\nTotal Subtask Time: {format_time(total_subtask_minutes)}")
+
+            print(f"\nContext Available: {'Yes' if extracted_data.get('context') else 'No'}")
             print(f"AI Suggested Difficulty: {extracted_data.get('ai_suggested_difficulty', 'N/A')}")
             print(f"AI Suggested Time (Hours): {extracted_data.get('ai_suggested_time', 'N/A')}")
 

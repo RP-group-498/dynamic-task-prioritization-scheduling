@@ -74,7 +74,7 @@ class MongoDBHandler:
                 {
                     "task_name": str,
                     "task_description": str,
-                    "sub_tasks": List[str],
+                    "sub_tasks": List[Dict],  # Each subtask: {"name": str, "estimated_minutes": int}
                     "context": str,
                     "ai_suggestions": {
                         "ai_suggested_difficulty": int,

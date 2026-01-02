@@ -16,6 +16,28 @@ const resultsCard = document.getElementById('resultsCard');
 
 let selectedFile = null;
 
+// Format time in minutes to human-readable format
+function formatTime(minutes) {
+    if (minutes === 0 || !minutes) {
+        return "0 minutes";
+    }
+
+    const hours = Math.floor(minutes / 60);
+    const mins = minutes % 60;
+
+    if (hours > 0 && mins > 0) {
+        const hourStr = hours === 1 ? "hour" : "hours";
+        const minStr = mins === 1 ? "minute" : "minutes";
+        return `${hours} ${hourStr} ${mins} ${minStr}`;
+    } else if (hours > 0) {
+        const hourStr = hours === 1 ? "hour" : "hours";
+        return `${hours} ${hourStr}`;
+    } else {
+        const minStr = mins === 1 ? "minute" : "minutes";
+        return `${mins} ${minStr}`;
+    }
+}
+
 // Initialize
 document.addEventListener('DOMContentLoaded', () => {
     setupEventListeners();
@@ -202,11 +224,40 @@ function displayResults(task) {
     subtasksList.innerHTML = '';
 
     if (task.sub_tasks && task.sub_tasks.length > 0) {
+        let totalSubtaskMinutes = 0;
         task.sub_tasks.forEach(subtask => {
             const li = document.createElement('li');
-            li.textContent = subtask;
+
+            // Handle new format (object with name and estimated_minutes)
+            if (typeof subtask === 'object' && subtask.name) {
+                // Support both new (estimated_minutes) and old (estimated_hours) formats
+                let minutes = subtask.estimated_minutes;
+                if (minutes === undefined || minutes === null) {
+                    // Fallback to old format (hours) and convert to minutes
+                    const hours = subtask.estimated_hours || 0;
+                    minutes = hours * 60;
+                }
+                totalSubtaskMinutes += minutes;
+                const timeStr = formatTime(minutes);
+                li.innerHTML = `<strong>${subtask.name}</strong> <span style="color: #7c3aed; font-weight: 600;">(${timeStr})</span>`;
+            } else {
+                // Handle old format (plain strings) for backward compatibility
+                li.textContent = subtask;
+            }
+
             subtasksList.appendChild(li);
         });
+
+        // Display total subtask time if applicable
+        if (totalSubtaskMinutes > 0) {
+            const totalLi = document.createElement('li');
+            const totalTimeStr = formatTime(totalSubtaskMinutes);
+            totalLi.innerHTML = `<strong style="color: #7c3aed;">Total Subtask Time: ${totalTimeStr}</strong>`;
+            totalLi.style.borderTop = '2px solid #7c3aed';
+            totalLi.style.marginTop = '10px';
+            totalLi.style.paddingTop = '10px';
+            subtasksList.appendChild(totalLi);
+        }
     } else {
         subtasksList.innerHTML = '<li>No subtasks available</li>';
     }
