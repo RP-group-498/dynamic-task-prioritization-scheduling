@@ -196,6 +196,8 @@ def main():
             print(f"Task Description: {extracted_data.get('task_description', 'N/A')}")
             print(f"Number of Subtasks: {len(extracted_data.get('sub_tasks', []))}")
             print(f"Context Available: {'Yes' if extracted_data.get('context') else 'No'}")
+            print(f"AI Suggested Difficulty: {extracted_data.get('ai_suggested_difficulty', 'N/A')}")
+            print(f"AI Suggested Time (Hours): {extracted_data.get('ai_suggested_time', 'N/A')}")
 
         except json.JSONDecodeError as e:
             print(f"\nError: Failed to parse JSON from Gemini: {e}")
@@ -227,6 +229,10 @@ def main():
             "task_description": extracted_data.get("task_description", ""),
             "sub_tasks": extracted_data.get("sub_tasks", []),
             "context": extracted_data.get("context", ""),
+            "ai_suggestions": {
+                "ai_suggested_difficulty": extracted_data.get("ai_suggested_difficulty"),
+                "ai_suggested_time": extracted_data.get("ai_suggested_time")
+            },
             "metrics": {
                 "deadline": deadline_input,
                 "days_left": days_left,
