@@ -76,6 +76,10 @@ class MongoDBHandler:
                     "task_description": str,
                     "sub_tasks": List[str],
                     "context": str,
+                    "ai_suggestions": {
+                        "ai_suggested_difficulty": int,
+                        "ai_suggested_time": int
+                    },
                     "metrics": {
                         "deadline": str,
                         "days_left": int,
