@@ -59,8 +59,8 @@ def get_extraction_prompt(deadline_input: str, user_days_left: int, user_credits
     - For `task_description`: Write a clear, simple ONE-LINE QUESTION that summarizes what needs to be done (e.g., "How to implement a sorting algorithm?").
     - For `sub_tasks`: List ALL subtasks, requirements, or deliverables.
     - For `context`: Include any important notes, constraints, or additional information.
-    - For `ai_suggested_difficulty`: Predict the difficulty on a scale of 1, 3, or 5 (Easy = 1, Medium = 3, Hard = 5).
-    - For `ai_suggested_time`: Estimate the total time in hours needed to complete the task as an integer.
+    - For `ai_suggested_difficulty`: Predict the difficulty from a university student perspective on a scale of 1, 3, or 5 (Easy = 1, Medium = 3, Hard = 5).
+    - For `ai_suggested_time`: Estimate the total time in hours needed for a university student to complete the task as an integer.
 
     **Output Format (Strict JSON):**
     {{
