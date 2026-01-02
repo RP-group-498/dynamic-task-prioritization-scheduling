@@ -43,20 +43,24 @@ def get_extraction_prompt(deadline_input: str, user_days_left: int, user_credits
         Formatted prompt string for Gemini API
     """
     return f"""
-    You are an intelligent PDF task extraction system. Read this assignment/task PDF carefully and extract the following information:
+    You are an intelligent PDF task extraction and analysis system. Read this assignment/task PDF carefully and extract the following information:
 
     **Your Goal:**
-    1. Extract the main task/assignment name or title
-    2. Extract the task description as a SIMPLE ONE-LINE QUESTION (e.g., "What algorithm should be implemented?", "How to design a database schema?")
-    3. Extract all subtasks or requirements listed in the document
-    4. Extract any additional context or notes
+    1. Extract the main task/assignment name or title.
+    2. Extract the task description as a SIMPLE ONE-LINE QUESTION.
+    3. Extract all subtasks or requirements.
+    4. Extract any additional context or notes.
+    5. Analyze the PDF content to predict the task's difficulty.
+    6. Estimate the time required to complete the task.
 
     **Instructions:**
-    - Extract the EXACT text from the PDF wherever possible
-    - For task_name: Use the main assignment title or question
-    - For task_description: Write a clear, simple ONE-LINE QUESTION that summarizes what needs to be done (this will be used for difficulty analysis)
-    - For sub_tasks: List ALL subtasks, requirements, or deliverables mentioned in the PDF
-    - For context: Include any important notes, constraints, or additional information
+    - Extract the EXACT text from the PDF wherever possible.
+    - For `task_name`: Use the main assignment title.
+    - For `task_description`: Write a clear, simple ONE-LINE QUESTION that summarizes what needs to be done (e.g., "How to implement a sorting algorithm?").
+    - For `sub_tasks`: List ALL subtasks, requirements, or deliverables.
+    - For `context`: Include any important notes, constraints, or additional information.
+    - For `ai_suggested_difficulty`: Predict the difficulty on a scale of 1, 3, or 5 (Easy = 1, Medium = 3, Hard = 5).
+    - For `ai_suggested_time`: Estimate the total time in hours needed to complete the task as an integer.
 
     **Output Format (Strict JSON):**
     {{
@@ -64,16 +68,17 @@ def get_extraction_prompt(deadline_input: str, user_days_left: int, user_credits
       "task_description": "A simple one-line question that describes what needs to be done (e.g., 'What is the implementation of Binary Search Tree?')",
       "sub_tasks": [
         "First subtask or requirement",
-        "Second subtask or requirement",
-        "Third subtask or requirement"
+        "Second subtask or requirement"
       ],
-      "context": "Any additional notes, constraints, or important information from the PDF"
+      "context": "Any additional notes, constraints, or important information from the PDF",
+      "ai_suggested_difficulty": 3,
+      "ai_suggested_time": 10
     }}
 
     **Important:**
-    - Return ONLY valid JSON (no markdown, no code blocks, no extra text)
-    - Ensure all strings are properly escaped
-    - If a field is not found in the PDF, use an empty string "" or empty array []
+    - Return ONLY valid JSON (no markdown, no code blocks, no extra text).
+    - Ensure all strings are properly escaped.
+    - If a field is not found, use an empty string "", empty array [], or 0 for numeric fields.
 
     Return ONLY the raw JSON.
     """
