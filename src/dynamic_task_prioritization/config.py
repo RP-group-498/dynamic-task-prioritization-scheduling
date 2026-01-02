@@ -52,23 +52,35 @@ def get_extraction_prompt(deadline_input: str, user_days_left: int, user_credits
     4. Extract any additional context or notes.
     5. Analyze the PDF content to predict the task's difficulty.
     6. Estimate the time required to complete the task.
+    7. Estimate the time required for EACH subtask individually.
 
     **Instructions:**
     - Extract the EXACT text from the PDF wherever possible.
     - For `task_name`: Use the main assignment title.
     - For `task_description`: Write a clear, simple ONE-LINE QUESTION that summarizes what needs to be done (e.g., "How to implement a sorting algorithm?").
-    - For `sub_tasks`: List ALL subtasks, requirements, or deliverables.
+    - For `sub_tasks`: List ALL subtasks, requirements, or deliverables as objects with their name and estimated time in minutes.
     - For `context`: Include any important notes, constraints, or additional information.
     - For `ai_suggested_difficulty`: Predict the difficulty from a university student perspective on a scale of 1, 3, or 5 (Easy = 1, Medium = 3, Hard = 5).
     - For `ai_suggested_time`: Estimate the total time in hours needed for a university student to complete the task as an integer.
+    - For each subtask's `estimated_minutes`: Estimate the time in minutes needed for that specific subtask as an integer (e.g., 30 for 30 minutes, 90 for 1.5 hours, 120 for 2 hours).
 
     **Output Format (Strict JSON):**
     {{
       "task_name": "The main assignment title or question from the PDF",
       "task_description": "A simple one-line question that describes what needs to be done (e.g., 'What is the implementation of Binary Search Tree?')",
       "sub_tasks": [
-        "First subtask or requirement",
-        "Second subtask or requirement"
+        {{
+          "name": "First subtask or requirement",
+          "estimated_minutes": 90
+        }},
+        {{
+          "name": "Second subtask or requirement",
+          "estimated_minutes": 45
+        }},
+        {{
+          "name": "Third subtask or requirement",
+          "estimated_minutes": 120
+        }}
       ],
       "context": "Any additional notes, constraints, or important information from the PDF",
       "ai_suggested_difficulty": 3,
