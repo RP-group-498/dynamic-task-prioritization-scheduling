@@ -77,11 +77,17 @@ ipcMain.handle('analyze-pdf', async (event, data) => {
     let errorData = '';
 
     pythonProcess.stdout.on('data', (data) => {
-      outputData += data.toString();
+      const output = data.toString();
+      outputData += output;
+      // Display Python output in terminal in real-time
+      console.log(output);
     });
 
     pythonProcess.stderr.on('data', (data) => {
-      errorData += data.toString();
+      const error = data.toString();
+      errorData += error;
+      // Display Python errors in terminal in real-time
+      console.error(error);
     });
 
     pythonProcess.on('close', (code) => {
