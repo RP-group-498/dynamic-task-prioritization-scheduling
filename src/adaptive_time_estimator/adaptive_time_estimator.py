@@ -52,9 +52,6 @@ class AdaptiveTimeEstimator:
         # Configuration
         self.threshold = 0.65
         self.top_k = 5
-        self.difficulty_map = {
-            1: 10, 2: 15, 3: 20, 4: 30, 5: 45
-        }
         
         print("✅ Estimator ready!")
     
@@ -125,19 +122,14 @@ class AdaptiveTimeEstimator:
         return round(weighted_sum)
     
     
-    def cold_start_prediction(self, difficulty):
-        """Estimate based on difficulty"""
-        return self.difficulty_map.get(difficulty, 20)
-    
-    
-    def predict_time(self, subtask_text, user_id, difficulty):
+    def predict_time(self, subtask_text, user_id, ai_suggested_time):
         """
         Main prediction function
         
         Args:
             subtask_text: Task description
             user_id: Student ID
-            difficulty: 1-5 difficulty level
+            ai_suggested_time: AI-provided time suggestion for cold starts
         
         Returns:
             Dictionary with prediction details
@@ -154,13 +146,12 @@ class AdaptiveTimeEstimator:
                 'explanation': f"Based on {len(similar)} similar tasks"
             }
         else:
-            time = self.cold_start_prediction(difficulty)
             return {
                 'method': 'cold_start',
-                'predicted_time': time,
+                'predicted_time': ai_suggested_time,
                 'confidence': 'LOW',
                 'similar_tasks': [],
-                'explanation': f"Based on difficulty level {difficulty}/5"
+                'explanation': "Based on AI suggestion"
             }
     
     

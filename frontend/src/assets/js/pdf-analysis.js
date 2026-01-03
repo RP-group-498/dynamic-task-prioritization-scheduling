@@ -1,6 +1,10 @@
 const { ipcRenderer } = require('electron');
 const path = require('path');
 
+// Configuration
+const API_BASE_URL = 'http://localhost:5000';
+const USER_ID = 'student_123';
+
 // DOM Elements
 const uploadArea = document.getElementById('uploadArea');
 const pdfInput = document.getElementById('pdfInput');
@@ -15,6 +19,10 @@ const analyzeSpinner = document.getElementById('analyzeSpinner');
 const resultsCard = document.getElementById('resultsCard');
 
 let selectedFile = null;
+let currentTaskData = null;
+let isEditMode = false;
+let hasUnsavedChanges = false;
+let hasBeenSaved = false; // Track if tasks have been saved (one-time edit only)
 
 // Format time in minutes to human-readable format
 function formatTime(minutes) {
@@ -43,6 +51,7 @@ document.addEventListener('DOMContentLoaded', () => {
     setupEventListeners();
     setupNavigation();
     setMinDate();
+    setupTimeAdjustmentListeners();
 });
 
 // Set minimum date to today
@@ -168,7 +177,13 @@ async function analyzeTask() {
     setLoadingState(true);
     resultsCard.style.display = 'none';
 
+    // Reset save state for new analysis
+    hasBeenSaved = false;
+    hasUnsavedChanges = false;
+    isEditMode = false;
+
     try {
+        // Step 1: Analyze PDF to extract subtasks
         const result = await ipcRenderer.invoke('analyze-pdf', {
             pdfPath: selectedFile.path,
             deadline: deadline,
@@ -177,8 +192,18 @@ async function analyzeTask() {
         });
 
         if (result && result.tasks && result.tasks.length > 0) {
-            displayResults(result.tasks[0]);
-            showNotification('Analysis completed successfully!', 'success');
+            const taskData = result.tasks[0];
+            currentTaskData = taskData;
+
+            // Step 2: Get time predictions from API
+            await getPredictionsFromAPI(taskData);
+
+            displayResults(taskData);
+
+            // Note: Tasks are no longer automatically saved.
+            // Users can adjust times using sliders and manually save using "Save All Tasks" button
+
+            showNotification('Analysis completed successfully! You can now adjust times and save.', 'success');
         } else {
             throw new Error('No results returned from analysis');
         }
@@ -187,6 +212,110 @@ async function analyzeTask() {
         showNotification('Failed to analyze PDF. Please try again.', 'error');
     } finally {
         setLoadingState(false);
+    }
+}
+
+// Get time predictions from API
+async function getPredictionsFromAPI(taskData) {
+    try {
+        console.log('Calling /predict-batch API...');
+
+        // Extract subtask names and AI estimated times
+        const subtasks = taskData.sub_tasks.map(subtask => {
+            if (typeof subtask === 'object' && subtask.name) {
+                return {
+                    name: subtask.name,
+                    ai_suggested_time: subtask.estimated_minutes || null // Use null if not present
+                };
+            }
+            // Fallback for subtasks that are just strings (though ideally they should be objects)
+            return {
+                name: subtask,
+                ai_suggested_time: null
+            };
+        });
+
+        // Prepare request data
+        const requestData = {
+            user_id: USER_ID,
+            main_task: {
+                name: taskData.task_name || 'Assignment',
+            },
+            subtasks: subtasks
+        };
+
+        console.log('Request data:', requestData);
+
+        // Call API
+        const response = await fetch(`${API_BASE_URL}/predict-batch`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(requestData)
+        });
+
+        if (!response.ok) {
+            throw new Error(`API error! status: ${response.status}`);
+        }
+
+        const predictions = await response.json();
+        console.log('API Response:', predictions);
+
+        // Update subtasks with predicted times
+        if (predictions.predictions && predictions.predictions.length > 0) {
+            let totalEstimatedTime = 0;
+
+            taskData.sub_tasks = taskData.sub_tasks.map((subtask, index) => {
+                const prediction = predictions.predictions[index];
+
+                // Get original AI estimate from Gemini
+                let aiEstimateMinutes = 0;
+                if (typeof subtask === 'object' && subtask.estimated_minutes) {
+                    aiEstimateMinutes = subtask.estimated_minutes;
+                }
+
+                // Decide which time to use based on prediction method
+                let finalTime;
+                if (prediction.method === 'warm_start') {
+                    // WARM START: Use API prediction (learned from user history)
+                    finalTime = prediction.predicted_time;
+                } else {
+                    // COLD START: Use AI estimate from Gemini (ignore API's difficulty-based value)
+                    finalTime = aiEstimateMinutes;
+                }
+
+                totalEstimatedTime += finalTime;
+
+                if (typeof subtask === 'object') {
+                    return {
+                        ...subtask,
+                        estimated_minutes: finalTime,
+                        ai_estimated_minutes: aiEstimateMinutes,
+                        api_predicted_minutes: prediction.predicted_time,
+                        confidence: prediction.confidence,
+                        method: prediction.method
+                    };
+                } else {
+                    return {
+                        name: subtask,
+                        estimated_minutes: finalTime,
+                        ai_estimated_minutes: aiEstimateMinutes,
+                        api_predicted_minutes: prediction.predicted_time,
+                        confidence: prediction.confidence,
+                        method: prediction.method
+                    };
+                }
+            });
+
+            // Store total time based on final estimates
+            taskData.total_estimated_time = totalEstimatedTime;
+        }
+
+        console.log('Updated task data with predictions');
+    } catch (error) {
+        console.error('Failed to get predictions from API:', error);
+        showNotification('Time estimation unavailable - using default estimates', 'warning');
     }
 }
 
@@ -225,8 +354,9 @@ function displayResults(task) {
 
     if (task.sub_tasks && task.sub_tasks.length > 0) {
         let totalSubtaskMinutes = 0;
-        task.sub_tasks.forEach(subtask => {
+        task.sub_tasks.forEach((subtask, index) => {
             const li = document.createElement('li');
+            li.setAttribute('data-subtask-index', index);
 
             // Handle new format (object with name and estimated_minutes)
             if (typeof subtask === 'object' && subtask.name) {
@@ -238,8 +368,58 @@ function displayResults(task) {
                     minutes = hours * 60;
                 }
                 totalSubtaskMinutes += minutes;
+                li.setAttribute('data-original-time', minutes);
+
                 const timeStr = formatTime(minutes);
-                li.innerHTML = `<strong>${subtask.name}</strong> <span style="color: #7c3aed; font-weight: 600;">(${timeStr})</span>`;
+
+                // Build header HTML with confidence and method if available
+                let headerContent = `<strong>${subtask.name}</strong> <span class="subtask-time" style="color: #7c3aed; font-weight: 600;">(${timeStr})</span>`;
+
+                if (subtask.confidence) {
+                    const confidenceColor = subtask.confidence === 'HIGH' ? '#10b981' :
+                                           subtask.confidence === 'MEDIUM' ? '#f59e0b' : '#ef4444';
+                    headerContent += ` <span style="color: ${confidenceColor}; font-size: 0.85em;">[${subtask.confidence}]</span>`;
+                }
+
+                if (subtask.method) {
+                    // Show which estimate source is being used
+                    const estimateSource = subtask.method === 'warm_start' ? 'API Prediction' : 'AI Estimate';
+                    const methodColor = subtask.method === 'warm_start' ? '#10b981' : '#6b7280';
+                    headerContent += ` <span style="color: ${methodColor}; font-size: 0.8em; font-style: italic;">(${estimateSource})</span>`;
+                }
+
+                // Create subtask header div
+                const headerDiv = document.createElement('div');
+                headerDiv.className = 'subtask-header';
+                headerDiv.innerHTML = headerContent;
+
+                // Calculate slider range
+                const minTime = Math.max(10, minutes - 20);
+                const maxTime = minutes + 40;
+
+                // Create time adjustment controls
+                const adjustmentDiv = document.createElement('div');
+                adjustmentDiv.className = 'time-adjustment';
+                adjustmentDiv.innerHTML = `
+                    <div class="slider-container">
+                        <span class="slider-label">Adjust Time:</span>
+                        <input type="range"
+                               class="time-slider"
+                               min="${minTime}"
+                               max="${maxTime}"
+                               step="10"
+                               value="${minutes}"
+                               data-subtask-index="${index}">
+                        <span class="slider-value">${minutes} min</span>
+                    </div>
+                    <div class="time-comparison">
+                        <span class="predicted-time">Predicted: ${minutes} min</span>
+                        <span class="time-difference neutral">Difference: 0 min</span>
+                    </div>
+                `;
+
+                li.appendChild(headerDiv);
+                li.appendChild(adjustmentDiv);
             } else {
                 // Handle old format (plain strings) for backward compatibility
                 li.textContent = subtask;
@@ -251,15 +431,29 @@ function displayResults(task) {
         // Display total subtask time if applicable
         if (totalSubtaskMinutes > 0) {
             const totalLi = document.createElement('li');
+            totalLi.setAttribute('id', 'totalTimeItem');
             const totalTimeStr = formatTime(totalSubtaskMinutes);
-            totalLi.innerHTML = `<strong style="color: #7c3aed;">Total Subtask Time: ${totalTimeStr}</strong>`;
+            totalLi.innerHTML = `<strong style="color: #7c3aed;">Total Estimated Time: ${totalTimeStr}</strong>`;
             totalLi.style.borderTop = '2px solid #7c3aed';
             totalLi.style.marginTop = '10px';
             totalLi.style.paddingTop = '10px';
             subtasksList.appendChild(totalLi);
         }
+
+        // Show action buttons
+        const actionsDiv = document.getElementById('subtasksActions');
+        actionsDiv.style.display = 'flex';
+
+        // If already saved, hide the "Adjust Times" button
+        if (hasBeenSaved) {
+            const adjustTimesBtn = document.getElementById('adjustTimesBtn');
+            if (adjustTimesBtn) {
+                adjustTimesBtn.style.display = 'none';
+            }
+        }
     } else {
         subtasksList.innerHTML = '<li>No subtasks available</li>';
+        document.getElementById('subtasksActions').style.display = 'none';
     }
 
     // Task Description
@@ -289,9 +483,293 @@ function showNotification(message, type = 'info') {
     // Simple alert for now - you can enhance this with a toast notification
     if (type === 'error') {
         alert('Error: ' + message);
+    } else if (type === 'warning') {
+        console.warn('Warning: ' + message);
     } else if (type === 'success') {
         console.log('Success: ' + message);
     } else {
         console.log('Info: ' + message);
+    }
+}
+
+// Setup Time Adjustment Listeners
+function setupTimeAdjustmentListeners() {
+    const adjustTimesBtn = document.getElementById('adjustTimesBtn');
+    const saveAllTasksBtn = document.getElementById('saveAllTasksBtn');
+    const cancelEditBtn = document.getElementById('cancelEditBtn');
+
+    if (adjustTimesBtn) {
+        adjustTimesBtn.addEventListener('click', toggleEditMode);
+    }
+
+    if (saveAllTasksBtn) {
+        saveAllTasksBtn.addEventListener('click', saveAllTasks);
+    }
+
+    if (cancelEditBtn) {
+        cancelEditBtn.addEventListener('click', cancelEdit);
+    }
+}
+
+// Toggle Edit Mode
+function toggleEditMode() {
+    // Prevent editing if tasks have already been saved
+    if (hasBeenSaved && !isEditMode) {
+        showNotification('Tasks have already been saved. You cannot edit them again.', 'warning');
+        return;
+    }
+
+    isEditMode = !isEditMode;
+    const subtasksList = document.getElementById('subtasksList');
+    const adjustTimesBtn = document.getElementById('adjustTimesBtn');
+    const saveAllTasksBtn = document.getElementById('saveAllTasksBtn');
+    const cancelEditBtn = document.getElementById('cancelEditBtn');
+
+    if (isEditMode) {
+        // Enter edit mode
+        subtasksList.classList.add('edit-mode');
+
+        // Show all sliders
+        const adjustmentDivs = document.querySelectorAll('.time-adjustment');
+        adjustmentDivs.forEach(div => {
+            div.classList.add('active');
+        });
+
+        // Update button visibility
+        adjustTimesBtn.style.display = 'none';
+        saveAllTasksBtn.style.display = 'inline-block';
+        cancelEditBtn.style.display = 'inline-block';
+
+        // Attach slider event listeners
+        const sliders = document.querySelectorAll('.time-slider');
+        sliders.forEach(slider => {
+            slider.addEventListener('input', handleSliderChange);
+        });
+    } else {
+        // Exit edit mode
+        subtasksList.classList.remove('edit-mode');
+
+        // Hide all sliders
+        const adjustmentDivs = document.querySelectorAll('.time-adjustment');
+        adjustmentDivs.forEach(div => {
+            div.classList.remove('active');
+        });
+
+        // Update button visibility
+        adjustTimesBtn.style.display = 'inline-block';
+        saveAllTasksBtn.style.display = 'none';
+        cancelEditBtn.style.display = 'none';
+
+        // Remove slider event listeners
+        const sliders = document.querySelectorAll('.time-slider');
+        sliders.forEach(slider => {
+            slider.removeEventListener('input', handleSliderChange);
+        });
+    }
+}
+
+// Handle Slider Change
+function handleSliderChange(event) {
+    const slider = event.target;
+    const newValue = parseInt(slider.value);
+    const subtaskIndex = parseInt(slider.getAttribute('data-subtask-index'));
+
+    // Update slider value display
+    const sliderValueSpan = slider.parentElement.querySelector('.slider-value');
+    sliderValueSpan.textContent = `${newValue} min`;
+
+    // Get the list item
+    const listItem = document.querySelector(`li[data-subtask-index="${subtaskIndex}"]`);
+    const originalTime = parseInt(listItem.getAttribute('data-original-time'));
+
+    // Update time display in subtask header
+    const timeSpan = listItem.querySelector('.subtask-time');
+    timeSpan.textContent = `(${formatTime(newValue)})`;
+
+    // Calculate and show difference from predicted time
+    const timeComparisonDiv = slider.parentElement.parentElement.querySelector('.time-comparison');
+    const predictedTimeSpan = timeComparisonDiv.querySelector('.predicted-time');
+    predictedTimeSpan.textContent = `Predicted: ${originalTime} min`;
+
+    const differenceSpan = timeComparisonDiv.querySelector('.time-difference');
+    const difference = newValue - originalTime;
+
+    if (difference > 0) {
+        differenceSpan.className = 'time-difference positive';
+        differenceSpan.textContent = `Difference: +${difference} min`;
+    } else if (difference < 0) {
+        differenceSpan.className = 'time-difference negative';
+        differenceSpan.textContent = `Difference: ${difference} min`;
+    } else {
+        differenceSpan.className = 'time-difference neutral';
+        differenceSpan.textContent = `Difference: 0 min`;
+    }
+
+    // Store user selection in currentTaskData
+    if (currentTaskData && currentTaskData.sub_tasks && currentTaskData.sub_tasks[subtaskIndex]) {
+        currentTaskData.sub_tasks[subtaskIndex].user_selected_minutes = newValue;
+    }
+
+    // Mark as having unsaved changes
+    hasUnsavedChanges = true;
+
+    // Update total time
+    updateTotalTime();
+}
+
+// Update Total Time
+function updateTotalTime() {
+    let totalMinutes = 0;
+    const sliders = document.querySelectorAll('.time-slider');
+
+    sliders.forEach(slider => {
+        totalMinutes += parseInt(slider.value);
+    });
+
+    const totalTimeItem = document.getElementById('totalTimeItem');
+    if (totalTimeItem) {
+        const totalTimeStr = formatTime(totalMinutes);
+        totalTimeItem.innerHTML = `<strong style="color: #7c3aed;">Total Estimated Time: ${totalTimeStr}</strong>`;
+    }
+}
+
+// Cancel Edit
+function cancelEdit() {
+    if (hasUnsavedChanges) {
+        const confirmed = confirm('You have unsaved changes. Are you sure you want to cancel?');
+        if (!confirmed) {
+            return;
+        }
+    }
+
+    // Reset all sliders to original values
+    const listItems = document.querySelectorAll('li[data-subtask-index]');
+    listItems.forEach(listItem => {
+        const originalTime = parseInt(listItem.getAttribute('data-original-time'));
+        const subtaskIndex = parseInt(listItem.getAttribute('data-subtask-index'));
+        const slider = listItem.querySelector('.time-slider');
+
+        if (slider) {
+            slider.value = originalTime;
+
+            // Update displays
+            const sliderValueSpan = slider.parentElement.querySelector('.slider-value');
+            sliderValueSpan.textContent = `${originalTime} min`;
+
+            const timeSpan = listItem.querySelector('.subtask-time');
+            timeSpan.textContent = `(${formatTime(originalTime)})`;
+
+            const differenceSpan = listItem.querySelector('.time-difference');
+            differenceSpan.className = 'time-difference neutral';
+            differenceSpan.textContent = `Difference: 0 min`;
+        }
+
+        // Clear user selection from data
+        if (currentTaskData && currentTaskData.sub_tasks && currentTaskData.sub_tasks[subtaskIndex]) {
+            currentTaskData.sub_tasks[subtaskIndex].user_selected_minutes = null;
+        }
+    });
+
+    // Reset total time
+    updateTotalTime();
+
+    // Reset state
+    hasUnsavedChanges = false;
+
+    // Exit edit mode
+    toggleEditMode();
+}
+
+// Save All Tasks
+async function saveAllTasks() {
+    if (!currentTaskData) {
+        showNotification('No task data available to save', 'error');
+        return;
+    }
+
+    // Validate time ranges
+    const sliders = document.querySelectorAll('.time-slider');
+    for (const slider of sliders) {
+        const value = parseInt(slider.value);
+        if (value < 10 || value > 480) {
+            showNotification('Time values must be between 10 and 480 minutes', 'error');
+            return;
+        }
+    }
+
+    // Prepare predictions data
+    const predictions = currentTaskData.sub_tasks.map((subtask, index) => {
+        const userSelectedTime = subtask.user_selected_minutes || subtask.estimated_minutes;
+
+        return {
+            subtask_text: subtask.name,
+            subtask_number: index + 1,
+            method: subtask.method || 'cold_start',
+            predicted_time: subtask.estimated_minutes,
+            user_estimate: userSelectedTime,
+            confidence: subtask.confidence || 'MEDIUM',
+            category: subtask.category || 'general'
+        };
+    });
+
+    // Prepare main task data with Final MCDM Score
+    const requestData = {
+        user_id: USER_ID,
+        main_task: {
+            name: currentTaskData.task_name,
+            difficulty: currentTaskData.metrics.difficulty_rating,
+            deadline: currentTaskData.metrics.deadline,
+            days_left: currentTaskData.metrics.days_left,
+            credits: currentTaskData.metrics.credits,
+            weight: currentTaskData.metrics.percentage || currentTaskData.weight,
+            final_mcdm_score: currentTaskData.mcdm_calculation.final_weighted_score,
+            priority: currentTaskData.priority
+        },
+        predictions: predictions
+    };
+
+    console.log('Saving tasks:', requestData);
+
+    // Show loading state
+    const saveBtn = document.getElementById('saveAllTasksBtn');
+    const originalText = saveBtn.textContent;
+    saveBtn.disabled = true;
+    saveBtn.textContent = 'Saving...';
+
+    try {
+        const response = await fetch(`${API_BASE_URL}/save-tasks`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(requestData)
+        });
+
+        if (!response.ok) {
+            throw new Error(`API error! status: ${response.status}`);
+        }
+
+        const result = await response.json();
+        console.log('Save response:', result);
+
+        showNotification('Tasks saved successfully! Times are now locked and cannot be edited again.', 'success');
+        hasUnsavedChanges = false;
+        hasBeenSaved = true; // Mark as saved - no more editing allowed
+
+        // Exit edit mode
+        isEditMode = true; // Set to true so toggleEditMode will exit
+        toggleEditMode();
+
+        // Hide the "Adjust Times" button permanently
+        const adjustTimesBtn = document.getElementById('adjustTimesBtn');
+        if (adjustTimesBtn) {
+            adjustTimesBtn.style.display = 'none';
+        }
+    } catch (error) {
+        console.error('Failed to save tasks:', error);
+        showNotification('Failed to save tasks. Please try again.', 'error');
+    } finally {
+        saveBtn.disabled = false;
+        saveBtn.textContent = originalText;
     }
 }

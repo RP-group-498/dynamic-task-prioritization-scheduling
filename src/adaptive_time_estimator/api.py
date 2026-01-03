@@ -92,7 +92,7 @@ def predict():
         prediction = estimator.predict_time(
             data['subtask'],
             data['user_id'],
-            data['difficulty']
+            ai_suggested_time=None # Pass None for ai_suggested_time as it's not provided for single predictions
         )
         
         # Add timestamp
@@ -141,12 +141,18 @@ def predict_batch():
         predictions = []
         total_time = 0
         
-        for i, subtask in enumerate(subtasks, 1):
-            pred = estimator.predict_time(subtask, user_id, difficulty)
+        for i, subtask_data in enumerate(subtasks, 1):
+            subtask_text = subtask_data.get('name')
+            ai_suggested_time = subtask_data.get('ai_suggested_time')
+            
+            if not subtask_text:
+                continue
+
+            pred = estimator.predict_time(subtask_text, user_id, ai_suggested_time)
             pred['subtask_number'] = i
-            pred['subtask_text'] = subtask
+            pred['subtask_text'] = subtask_text
             predictions.append(pred)
-            total_time += pred['predicted_time']
+            total_time += pred.get('predicted_time', 0)
         
         return jsonify({
             "predictions": predictions,
