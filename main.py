@@ -143,8 +143,10 @@ def main():
 
     # Check if running in automated mode (from Electron) or manual mode
     if args.input:
-        # AUTOMATED MODE: Read from JSON input file
-        print("Running in automated mode (Electron frontend)...")
+        # AUTOMATED MODE: Read from JSON input file (from frontend)
+        print("\n" + "=" * 80)
+        print("AUTOMATED MODE - Processing request from Frontend")
+        print("=" * 80)
         try:
             with open(args.input, 'r', encoding='utf-8') as f:
                 input_data = json.load(f)
@@ -159,9 +161,12 @@ def main():
             today = datetime.date.today()
             days_left = (deadline_date - today).days
 
-            print(f"PDF: {pdf_file}")
-            print(f"Deadline: {deadline_input} ({days_left} days left)")
-            print(f"Credits: {credits}, Weight: {weight}%")
+            print(f"\nRequest Parameters:")
+            print(f"  PDF File: {pdf_file.name}")
+            print(f"  Deadline: {deadline_input} ({days_left} days left)")
+            print(f"  Credits: {credits}")
+            print(f"  Weight: {weight}%")
+            print("=" * 80)
 
         except Exception as e:
             print(f"Error reading input file: {e}")
@@ -219,15 +224,19 @@ def main():
             print("[OK] Successfully parsed extraction data")
 
             # Display extracted information
-            print(f"\n--- Extracted Task Information ---")
+            print(f"\n{'='*80}")
+            print(f"EXTRACTED TASK INFORMATION")
+            print(f"{'='*80}")
             print(f"Task Name: {extracted_data.get('task_name', 'N/A')}")
-            print(f"Task Description: {extracted_data.get('task_description', 'N/A')}")
+            print(f"Task Description: {extracted_data.get('task_description', 'N/A')[:100]}...")
             print(f"Number of Subtasks: {len(extracted_data.get('sub_tasks', []))}")
 
             # Display subtasks with AI estimated time
             subtasks = extracted_data.get('sub_tasks', [])
             if subtasks:
-                print("\nSubtasks with AI Estimated Time:")
+                print(f"\n{'='*80}")
+                print(f"SUBTASKS WITH AI TIME ESTIMATES")
+                print(f"{'='*80}")
                 total_subtask_minutes = 0
                 for idx, subtask in enumerate(subtasks, 1):
                     if isinstance(subtask, dict):
@@ -239,15 +248,20 @@ def main():
                             subtask_hours = subtask.get('estimated_hours', 0)
                             subtask_minutes = subtask_hours * 60
                         total_subtask_minutes += subtask_minutes
-                        print(f"  {idx}. {subtask_name} - {format_time(subtask_minutes)}")
+                        print(f"  {idx}. {subtask_name}")
+                        print(f"     Estimated Time: {format_time(subtask_minutes)}")
                     else:
                         # Handle old format (plain strings) for backward compatibility
-                        print(f"  {idx}. {subtask} - No time estimate")
-                print(f"\nTotal Subtask Time: {format_time(total_subtask_minutes)}")
+                        print(f"  {idx}. {subtask}")
+                        print(f"     Estimated Time: Not available")
+                if total_subtask_minutes > 0:
+                    print(f"\n{'='*80}")
+                    print(f"TOTAL ESTIMATED TIME: {format_time(total_subtask_minutes)}")
+                    print(f"{'='*80}")
 
-            print(f"\nContext Available: {'Yes' if extracted_data.get('context') else 'No'}")
-            print(f"AI Suggested Difficulty: {extracted_data.get('ai_suggested_difficulty', 'N/A')}")
-            print(f"AI Suggested Time (Hours): {extracted_data.get('ai_suggested_time', 'N/A')}")
+            print(f"\nAI Suggestions:")
+            print(f"  Suggested Difficulty: {extracted_data.get('ai_suggested_difficulty', 'N/A')}")
+            print(f"  Suggested Time (Hours): {extracted_data.get('ai_suggested_time', 'N/A')}")
 
         except json.JSONDecodeError as e:
             print(f"\nError: Failed to parse JSON from Gemini: {e}")
@@ -255,23 +269,29 @@ def main():
             return
 
         # Step 2: Predict difficulty using ML model
-        print("\nStep 2: Predicting difficulty using ML model...")
+        print(f"\n{'='*80}")
+        print("STEP 2: ML-BASED DIFFICULTY PREDICTION")
+        print(f"{'='*80}")
         task_description = extracted_data.get("task_description", "")
         difficulty_rating = predictor.predict_difficulty(task_description)
 
         # Step 3: Calculate MCDM scores
-        print("\nStep 3: Calculating MCDM scores...")
+        print(f"\n{'='*80}")
+        print("STEP 3: MCDM PRIORITY CALCULATION")
+        print(f"{'='*80}")
         urgency_score = calculate_urgency_score(days_left)
         impact_score = calculate_impact_score(credits, weight)
         difficulty_score = calculate_difficulty_score(difficulty_rating)
         final_score = calculate_final_score(urgency_score, impact_score, difficulty_score)
         priority_label = get_priority_label(final_score)
 
-        print(f"  -> Urgency Score: {urgency_score}/100 ({days_left} days left)")
-        print(f"  -> Impact Score: {impact_score}/100 ({credits} credits x {weight}%)")
-        print(f"  -> Difficulty Score: {difficulty_score}/100 (ML rating: {difficulty_rating}/5)")
-        print(f"  -> Final MCDM Score: {final_score:.1f}/100")
-        print(f"  -> Priority: {priority_label}")
+        print(f"\nScores:")
+        print(f"  Urgency Score:    {urgency_score}/100  ({days_left} days left)")
+        print(f"  Impact Score:     {impact_score}/100  ({credits} credits × {weight}%)")
+        print(f"  Difficulty Score: {difficulty_score}/100  (ML rating: {difficulty_rating}/5)")
+        print(f"\n  Final MCDM Score: {final_score:.1f}/100")
+        print(f"  Priority Level:   {priority_label}")
+        print(f"{'='*80}")
 
         # Step 4: Build final output JSON
         task_data = {
@@ -303,48 +323,54 @@ def main():
             "tasks": [task_data]
         }
 
-        # Step 5: Display and save results
-        print("\n" + "=" * 60)
-        print("FINAL MCDM ANALYSIS RESULT")
-        print("=" * 60)
-        print(json.dumps(final_output, indent=2, ensure_ascii=False))
-
-        # Save to JSON file
+        # Step 5: Save results
         OUTPUTS_DIR.mkdir(parents=True, exist_ok=True)
         output_file = OUTPUTS_DIR / "mcdm_output.json"
 
         with open(output_file, "w", encoding="utf-8") as f:
             json.dump(final_output, f, indent=2, ensure_ascii=False)
 
-        print(f"\n[SUCCESS] MCDM Data saved to JSON: {output_file}")
+        print(f"\n{'='*80}")
+        print(f"RESULTS SAVED")
+        print(f"{'='*80}")
+        print(f"  Output File: {output_file}")
+        print(f"  Task Name: {task_data['task_name']}")
+        print(f"  Priority: {priority_label}")
+        print(f"  Final Score: {final_score:.1f}/100")
+        print(f"{'='*80}")
 
         # Step 6: Save to MongoDB
         try:
-            print("\n" + "=" * 60)
-            print("Saving to MongoDB...")
-            print("=" * 60)
+            print(f"\n{'='*80}")
+            print("SAVING TO MONGODB")
+            print(f"{'='*80}")
 
             db_handler = MongoDBHandler(MONGODB_URI)
             task_id = db_handler.save_task(task_data)
 
-            print(f"[SUCCESS] Task successfully saved to MongoDB!")
-            print(f"   Database: {db_handler.db.name}")
-            print(f"   Collection: {db_handler.tasks_collection.name}")
-            print(f"   Document ID: {task_id}")
+            print(f"  Status: SUCCESS")
+            print(f"  Database: {db_handler.db.name}")
+            print(f"  Collection: {db_handler.tasks_collection.name}")
+            print(f"  Document ID: {task_id}")
 
             # Display statistics
             stats = db_handler.get_task_statistics()
-            print(f"\n[STATS] Database Statistics:")
-            print(f"   Total Tasks: {stats.get('total_tasks', 0)}")
-            print(f"   High Priority: {stats.get('high_priority', 0)}")
-            print(f"   Medium Priority: {stats.get('medium_priority', 0)}")
-            print(f"   Low Priority: {stats.get('low_priority', 0)}")
+            print(f"\n  Database Statistics:")
+            print(f"    Total Tasks: {stats.get('total_tasks', 0)}")
+            print(f"    High Priority: {stats.get('high_priority', 0)}")
+            print(f"    Medium Priority: {stats.get('medium_priority', 0)}")
+            print(f"    Low Priority: {stats.get('low_priority', 0)}")
+            print(f"{'='*80}")
 
             db_handler.close()
 
         except Exception as e:
-            print(f"\n[WARNING] Failed to save to MongoDB: {e}")
-            print("   Data has been saved to JSON file only.")
+            print(f"\n{'='*80}")
+            print(f"MONGODB WARNING")
+            print(f"{'='*80}")
+            print(f"  Failed to save to MongoDB: {e}")
+            print(f"  Data has been saved to JSON file only.")
+            print(f"{'='*80}")
 
     except Exception as e:
         print(f"\nError: {e}")
