@@ -41,6 +41,11 @@ document.addEventListener('DOMContentLoaded', () => {
     setupNavigation();
     loadTasksFromAPI();
     renderCalendar();
+
+    // Set up real-time polling to refresh tasks every 5 seconds
+    setInterval(() => {
+        loadTasksFromAPI(true); // Silent mode to reduce console spam
+    }, 5000); // Refresh every 5 seconds
 });
 
 // Setup Navigation
@@ -91,9 +96,9 @@ function setupEventListeners() {
 }
 
 // Load tasks from API
-async function loadTasksFromAPI() {
+async function loadTasksFromAPI(silent = false) {
     try {
-        console.log('Fetching tasks from API...');
+        if (!silent) console.log('Fetching tasks from API...');
         const response = await fetch(`${API_BASE_URL}/tasks/${USER_ID}`);
 
         if (!response.ok) {
@@ -101,7 +106,7 @@ async function loadTasksFromAPI() {
         }
 
         const data = await response.json();
-        console.log('API Response:', data);
+        if (!silent) console.log('API Response:', data);
 
         // Transform API data to internal format
         tasks = data.tasks.map(task => {
@@ -131,7 +136,7 @@ async function loadTasksFromAPI() {
             };
         });
 
-        console.log(`Loaded ${tasks.length} tasks`);
+        if (!silent) console.log(`Loaded ${tasks.length} tasks`);
 
         renderTodoList();
         updateStatistics();
@@ -265,7 +270,9 @@ function createModalTaskElement(task) {
     const taskItem = document.createElement('div');
     taskItem.className = `modal-task-item ${task.priority}`;
 
-    const timeStr = formatTime(task.predicted_time);
+    // Prioritize user_estimate over predicted_time (system_estimate)
+    const estimatedTime = task.user_estimate || task.predicted_time;
+    const timeStr = formatTime(estimatedTime);
     const statusBadge = getStatusBadge(task.status);
 
     taskItem.innerHTML = `
@@ -348,7 +355,9 @@ function createTodoElement(task) {
     const todoItem = document.createElement('div');
     todoItem.className = `todo-item ${task.priority}`;
 
-    const timeStr = formatTime(task.predicted_time);
+    // Prioritize user_estimate over predicted_time (system_estimate)
+    const estimatedTime = task.user_estimate || task.predicted_time;
+    const timeStr = formatTime(estimatedTime);
     const allocationDate = task.time_allocation_date
         ? formatDate(task.time_allocation_date.split('T')[0])
         : 'Not scheduled';
@@ -412,8 +421,12 @@ function updateStatistics() {
 // Update time estimation
 function updateTimeEstimation() {
     // Calculate total estimated time for incomplete tasks
+    // Prioritize user_estimate over predicted_time (system_estimate)
     const incompleteTasks = tasks.filter(task => task.status !== 'completed');
-    const totalMinutes = incompleteTasks.reduce((sum, task) => sum + (task.predicted_time || 0), 0);
+    const totalMinutes = incompleteTasks.reduce((sum, task) => {
+        const estimatedTime = task.user_estimate || task.predicted_time || 0;
+        return sum + estimatedTime;
+    }, 0);
     totalEstimatedTime.textContent = formatTime(totalMinutes);
 
     // Calculate workload (assuming 8 hours/day available for 7 days = 3360 minutes)
