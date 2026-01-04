@@ -19,14 +19,28 @@ from flask import Flask, request, jsonify
 from flask_cors import CORS
 from adaptive_time_estimator import AdaptiveTimeEstimator
 from datetime import datetime
+from pymongo import MongoClient
+from bson.objectid import ObjectId
+import os
+from dotenv import load_dotenv
 
 app = Flask(__name__)
 CORS(app)  # Enable CORS for frontend access
+
+# Load environment variables
+load_dotenv('.env')
 
 # Initialize estimator (loads once at startup)
 print("Initializing model...")
 estimator = AdaptiveTimeEstimator('.env', 'models/sbert_model')
 print("Model ready!")
+
+# Initialize APDIS database connection
+print("Connecting to APDIS database...")
+apdis_client = MongoClient(os.getenv('APDIS_MONGODB_URI'))
+apdis_db = apdis_client[os.getenv('APDIS_DATABASE_NAME')]
+active_time_collection = apdis_db[os.getenv('APDIS_COLLECTION_ACTIVE_TIME')]
+print("APDIS database connected!")
 
 
 @app.route('/', methods=['GET'])
@@ -43,6 +57,8 @@ def home():
             "GET /accuracy/<user_id>": "Get model accuracy for user",
             "GET /tasks/<user_id>": "Get all tasks for a user",
             "POST /save-tasks": "Save tasks to database",
+            "GET /active-time/<id>": "Get active time prediction by ID",
+            "GET /active-time/user/<user_id>": "Get all active time predictions for a user",
             "GET /health": "Check API health"
         }
     })
@@ -361,20 +377,166 @@ def get_user_tasks(user_id):
         return jsonify({"error": str(e)}), 500
 
 
+@app.route('/active-time/debug', methods=['GET'])
+def debug_active_time():
+    """
+    Debug endpoint to check database connection and data
+    """
+    try:
+        # Get total count
+        total_count = active_time_collection.count_documents({})
+
+        # Get sample data
+        sample = list(active_time_collection.find().limit(5))
+
+        # Convert ObjectId to string
+        for doc in sample:
+            doc['_id'] = str(doc['_id'])
+
+        # Get all unique userIds
+        unique_users = active_time_collection.distinct("userId")
+
+        return jsonify({
+            "database": os.getenv('APDIS_DATABASE_NAME'),
+            "collection": os.getenv('APDIS_COLLECTION_ACTIVE_TIME'),
+            "total_documents": total_count,
+            "unique_users": unique_users,
+            "sample_data": sample
+        })
+
+    except Exception as e:
+        return jsonify({
+            "error": str(e),
+            "message": "Database connection or query error"
+        }), 500
+
+
+@app.route('/active-time/<id>', methods=['GET'])
+def get_active_time_by_id(id):
+    """
+    Get active time prediction by ID
+
+    Response:
+    {
+        "_id": "69595363e9314c7aea401787",
+        "date": "2026-01-04",
+        "userId": "user_003",
+        "day": "Sunday",
+        "predictedAcademicMinutes": 71,
+        "predictedActiveEnd": "03:51 PM",
+        "predictedActiveStart": "02:13 PM",
+        "source": "7_day_behavior_prediction"
+    }
+    """
+    try:
+        # Convert string ID to ObjectId
+        object_id = ObjectId(id)
+
+        # Fetch document from APDIS database
+        result = active_time_collection.find_one({"_id": object_id})
+
+        if result:
+            # Convert ObjectId to string for JSON serialization
+            result['_id'] = str(result['_id'])
+            return jsonify(result)
+        else:
+            return jsonify({
+                "error": "Active time prediction not found",
+                "id": id
+            }), 404
+
+    except Exception as e:
+        return jsonify({
+            "error": str(e),
+            "message": "Invalid ID format or database error"
+        }), 400
+
+
+@app.route('/active-time/user/<user_id>', methods=['GET'])
+def get_active_time_by_user(user_id):
+    """
+    Get all active time predictions for a specific user
+
+    Query parameters:
+        date: Filter by specific date (YYYY-MM-DD) - optional
+        limit: Maximum number of results to return - optional (default: all)
+        sort: Sort by field (default: date, descending)
+
+    Response:
+    {
+        "user_id": "user_003",
+        "predictions": [
+            {
+                "_id": "69595363e9314c7aea401787",
+                "date": "2026-01-04",
+                "userId": "user_003",
+                "day": "Sunday",
+                "predictedAcademicMinutes": 71,
+                "predictedActiveEnd": "03:51 PM",
+                "predictedActiveStart": "02:13 PM",
+                "source": "7_day_behavior_prediction"
+            }
+        ],
+        "count": 1,
+        "total_predicted_minutes": 71
+    }
+    """
+    try:
+        # Get query parameters
+        date_filter = request.args.get('date')
+        limit = request.args.get('limit', type=int)
+        sort_field = request.args.get('sort', 'date')
+
+        # Build query
+        query = {"userId": user_id}
+        if date_filter:
+            query["date"] = date_filter
+
+        # Fetch predictions from database
+        predictions_cursor = active_time_collection.find(query).sort(sort_field, -1)
+
+        if limit:
+            predictions_cursor = predictions_cursor.limit(limit)
+
+        predictions = list(predictions_cursor)
+
+        # Convert ObjectId to string and calculate totals
+        total_minutes = 0
+        for pred in predictions:
+            pred['_id'] = str(pred['_id'])
+            total_minutes += pred.get('predictedAcademicMinutes', 0)
+
+        return jsonify({
+            "user_id": user_id,
+            "predictions": predictions,
+            "count": len(predictions),
+            "total_predicted_minutes": total_minutes,
+            "timestamp": datetime.now().isoformat()
+        })
+
+    except Exception as e:
+        return jsonify({
+            "error": str(e),
+            "message": "Database error while fetching predictions"
+        }), 500
+
+
 if __name__ == '__main__':
     print("\n" + "="*60)
     print("🚀 Adaptive Time Estimation API")
     print("="*60)
     print("\nAPI running at: http://localhost:5000")
     print("\nEndpoints:")
-    print("  GET  /              - API info")
-    print("  GET  /health        - Health check")
-    print("  POST /predict       - Single prediction")
-    print("  POST /predict-batch - Multiple predictions")
-    print("  POST /complete      - Mark task complete")
-    print("  GET  /accuracy/<id> - Get accuracy")
-    print("  GET  /tasks/<id>    - Get all user tasks")
-    print("  POST /save-tasks    - Save tasks")
+    print("  GET  /                       - API info")
+    print("  GET  /health                 - Health check")
+    print("  POST /predict                - Single prediction")
+    print("  POST /predict-batch          - Multiple predictions")
+    print("  POST /complete               - Mark task complete")
+    print("  GET  /accuracy/<id>          - Get accuracy")
+    print("  GET  /tasks/<id>             - Get all user tasks")
+    print("  POST /save-tasks             - Save tasks")
+    print("  GET  /active-time/<id>       - Get active time by ID")
+    print("  GET  /active-time/user/<id>  - Get user active times")
     print("\n" + "="*60 + "\n")
 
     app.run(debug=True, host='0.0.0.0', port=5000)
