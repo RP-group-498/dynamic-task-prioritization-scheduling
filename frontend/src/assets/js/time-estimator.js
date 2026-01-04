@@ -130,7 +130,9 @@ async function loadTasksFromAPI(silent = false) {
                 completed_date: task.completed_date,
                 confidence: task.confidence || 'UNKNOWN',
                 method: task.method || 'unknown',
-                priority: priority
+                priority: priority,
+                predictedActiveStart: task.predictedActiveStart,
+                predictedActiveEnd: task.predictedActiveEnd
             };
         });
 
@@ -273,6 +275,14 @@ function createModalTaskElement(task) {
     const timeStr = formatTime(estimatedTime);
     const statusBadge = getStatusBadge(task.status);
 
+    // Show active time window if available
+    const activeWindowHtml = task.predictedActiveStart && task.predictedActiveEnd ? `
+        <div class="modal-meta-item">
+            <span class="meta-label">Active Window:</span>
+            <span class="meta-value">${task.predictedActiveStart} - ${task.predictedActiveEnd}</span>
+        </div>
+    ` : '';
+
     taskItem.innerHTML = `
         <div class="modal-task-header">
             <div class="modal-task-title">${task.name}</div>
@@ -288,6 +298,7 @@ function createModalTaskElement(task) {
                 <span class="meta-label">Estimated Time:</span>
                 <span class="meta-value">${timeStr}</span>
             </div>
+            ${activeWindowHtml}
             <div class="modal-meta-item">
                 <span class="meta-label">Confidence:</span>
                 <span class="meta-value confidence-${task.confidence}">${task.confidence}</span>
@@ -360,6 +371,14 @@ function createTodoElement(task) {
         ? formatDate(task.time_allocation_date.split('T')[0])
         : 'Not scheduled';
 
+    // Show active time window if available
+    const activeWindowInfo = task.predictedActiveStart && task.predictedActiveEnd ? `
+        <div class="todo-meta-item">
+            <span>🕒</span>
+            <span>${task.predictedActiveStart} - ${task.predictedActiveEnd}</span>
+        </div>
+    ` : '';
+
     todoItem.innerHTML = `
         <div class="todo-header">
             <div class="todo-title">${task.name}</div>
@@ -369,6 +388,7 @@ function createTodoElement(task) {
                 <span>📅</span>
                 <span>${allocationDate}</span>
             </div>
+            ${activeWindowInfo}
             <div class="todo-meta-item">
                 <span>⏱️</span>
                 <span>${timeStr}</span>

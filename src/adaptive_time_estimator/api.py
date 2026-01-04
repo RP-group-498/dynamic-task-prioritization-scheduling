@@ -57,6 +57,8 @@ def home():
             "GET /accuracy/<user_id>": "Get model accuracy for user",
             "GET /tasks/<user_id>": "Get all tasks for a user",
             "POST /save-tasks": "Save tasks to database",
+            "POST /allocate-tasks/<user_id>": "Allocate tasks based on active time predictions",
+            "GET /active-time/debug": "Debug APDIS database connection",
             "GET /active-time/<id>": "Get active time prediction by ID",
             "GET /active-time/user/<user_id>": "Get all active time predictions for a user",
             "GET /health": "Check API health"
@@ -357,7 +359,9 @@ def get_user_tasks(user_id):
                 "status": task.get('status', 'scheduled'),
                 "created_date": task.get('created_date', datetime.now()).isoformat(),
                 "completed_date": task.get('completed_date', '').isoformat() if task.get('completed_date') else None,
-                "time_allocation_date": time_allocation_str
+                "time_allocation_date": time_allocation_str,
+                "predictedActiveStart": task.get('predictedActiveStart'),
+                "predictedActiveEnd": task.get('predictedActiveEnd')
             }
             formatted_tasks.append(formatted_task)
 
@@ -375,6 +379,191 @@ def get_user_tasks(user_id):
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+
+@app.route('/allocate-tasks/<user_id>', methods=['POST'])
+def allocate_tasks(user_id):
+    """
+    Allocate tasks to days based on active time predictions
+
+    Request body:
+    {
+        "active_time_user_id": "user_003",  // User ID for active time predictions (APDIS database)
+        "start_date": "2026-01-04",         // Optional: start from specific date
+        "days_ahead": 7                      // Optional: number of days to consider (default: 7)
+    }
+
+    Response:
+    {
+        "user_id": "student_123",
+        "active_time_user_id": "user_003",
+        "allocated_tasks": 5,
+        "unallocated_tasks": 0,
+        "allocations": [
+            {
+                "date": "2026-01-04",
+                "day": "Sunday",
+                "available_minutes": 71,
+                "used_minutes": 65,
+                "active_window": "02:13 PM - 03:51 PM",
+                "tasks": [
+                    {
+                        "task_id": "...",
+                        "subtask": "Create login page",
+                        "estimated_time": 30
+                    }
+                ]
+            }
+        ]
+    }
+    """
+    try:
+        from datetime import datetime, timedelta
+
+        data = request.json or {}
+
+        # Get active_time_user_id from request body (required)
+        active_time_user_id = data.get('active_time_user_id')
+        if not active_time_user_id:
+            return jsonify({
+                "error": "Missing 'active_time_user_id' in request body",
+                "message": "Please provide the user ID for active time predictions"
+            }), 400
+
+        start_date_str = data.get('start_date')
+        days_ahead = data.get('days_ahead', 7)
+
+        # Get start date
+        if start_date_str:
+            start_date = datetime.strptime(start_date_str, '%Y-%m-%d')
+        else:
+            start_date = datetime.now()
+
+        # Get active time predictions for the active_time_user_id
+        end_date = start_date + timedelta(days=days_ahead)
+
+        active_times = list(active_time_collection.find({
+            "userId": active_time_user_id,
+            "date": {
+                "$gte": start_date.strftime('%Y-%m-%d'),
+                "$lte": end_date.strftime('%Y-%m-%d')
+            }
+        }).sort("date", 1))
+
+        if not active_times:
+            return jsonify({
+                "error": "No active time predictions found for this user",
+                "active_time_user_id": active_time_user_id,
+                "date_range": f"{start_date.strftime('%Y-%m-%d')} to {end_date.strftime('%Y-%m-%d')}"
+            }), 404
+
+        # Get incomplete tasks for the user
+        incomplete_tasks = list(estimator.tasks.find({
+            "user_id": user_id,
+            "status": {"$ne": "completed"}
+        }).sort([("main_task.difficulty", -1)]))  # High priority first
+
+        if not incomplete_tasks:
+            return jsonify({
+                "message": "No incomplete tasks found for this user",
+                "user_id": user_id
+            }), 200
+
+        # Debug: Log task information
+        debug_tasks = []
+        for task in incomplete_tasks:
+            estimated_time = task['estimates'].get('user_estimate') or task['estimates'].get('system_estimate', 0)
+            debug_tasks.append({
+                "task_id": str(task['_id']),
+                "subtask": task['sub_task'].get('description', 'Unknown'),
+                "estimated_time": estimated_time,
+                "user_estimate": task['estimates'].get('user_estimate'),
+                "system_estimate": task['estimates'].get('system_estimate'),
+                "status": task.get('status')
+            })
+
+        # Allocate tasks to days
+        allocations = []
+        allocated_task_ids = []
+        remaining_tasks = list(range(len(incomplete_tasks)))  # Track indices of unallocated tasks
+
+        for active_time in active_times:
+            date_str = active_time['date']
+            available_minutes = active_time.get('predictedAcademicMinutes', 0)
+            used_minutes = 0
+            day_tasks = []
+
+            # Try to fit tasks into this day
+            tasks_to_remove = []
+            for task_idx in remaining_tasks:
+                task = incomplete_tasks[task_idx]
+                estimated_time = task['estimates'].get('user_estimate') or task['estimates'].get('system_estimate', 0)
+
+                # Check if task fits in remaining time for this day
+                if used_minutes + estimated_time <= available_minutes:
+                    # Create datetime for this date
+                    task_date = datetime.strptime(date_str, '%Y-%m-%d')
+
+                    # Get active time window for this day
+                    predicted_start = active_time.get('predictedActiveStart', '')
+                    predicted_end = active_time.get('predictedActiveEnd', '')
+
+                    # Update task with allocation date and active time window
+                    estimator.tasks.update_one(
+                        {"_id": task['_id']},
+                        {"$set": {
+                            "time_allocation_date": task_date,
+                            "predictedActiveStart": predicted_start,
+                            "predictedActiveEnd": predicted_end
+                        }}
+                    )
+
+                    day_tasks.append({
+                        "task_id": str(task['_id']),
+                        "subtask": task['sub_task'].get('description', 'Unknown'),
+                        "estimated_time": estimated_time,
+                        "category": task['sub_task'].get('category', 'general'),
+                        "predictedActiveStart": predicted_start,
+                        "predictedActiveEnd": predicted_end
+                    })
+
+                    allocated_task_ids.append(str(task['_id']))
+                    used_minutes += estimated_time
+                    tasks_to_remove.append(task_idx)
+
+            # Remove allocated tasks from remaining tasks
+            for task_idx in reversed(tasks_to_remove):
+                remaining_tasks.remove(task_idx)
+
+            # Record allocation for this day
+            allocations.append({
+                "date": date_str,
+                "day": active_time.get('day', ''),
+                "available_minutes": available_minutes,
+                "used_minutes": used_minutes,
+                "remaining_minutes": available_minutes - used_minutes,
+                "active_window": f"{active_time.get('predictedActiveStart', '')} - {active_time.get('predictedActiveEnd', '')}",
+                "tasks_count": len(day_tasks),
+                "tasks": day_tasks
+            })
+
+        unallocated_count = len(remaining_tasks)
+
+        return jsonify({
+            "user_id": user_id,
+            "active_time_user_id": active_time_user_id,
+            "allocated_tasks": len(allocated_task_ids),
+            "unallocated_tasks": unallocated_count,
+            "allocations": allocations,
+            "debug_tasks": debug_tasks,  # Debug information
+            "timestamp": datetime.now().isoformat()
+        })
+
+    except Exception as e:
+        return jsonify({
+            "error": str(e),
+            "message": "Error allocating tasks"
+        }), 500
 
 
 @app.route('/active-time/debug', methods=['GET'])
@@ -535,6 +724,8 @@ if __name__ == '__main__':
     print("  GET  /accuracy/<id>          - Get accuracy")
     print("  GET  /tasks/<id>             - Get all user tasks")
     print("  POST /save-tasks             - Save tasks")
+    print("  POST /allocate-tasks/<id>    - Allocate tasks to days")
+    print("  GET  /active-time/debug      - Debug APDIS connection")
     print("  GET  /active-time/<id>       - Get active time by ID")
     print("  GET  /active-time/user/<id>  - Get user active times")
     print("\n" + "="*60 + "\n")
