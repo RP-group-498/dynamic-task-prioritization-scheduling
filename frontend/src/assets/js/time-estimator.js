@@ -26,8 +26,6 @@ const totalTasksCount = document.getElementById('totalTasksCount');
 
 // Time estimation elements
 const totalEstimatedTime = document.getElementById('totalEstimatedTime');
-const workloadFill = document.getElementById('workloadFill');
-const workloadText = document.getElementById('workloadText');
 
 // Modal elements
 const taskModal = document.getElementById('taskModal');
@@ -428,13 +426,6 @@ function updateTimeEstimation() {
         return sum + estimatedTime;
     }, 0);
     totalEstimatedTime.textContent = formatTime(totalMinutes);
-
-    // Calculate workload (assuming 8 hours/day available for 7 days = 3360 minutes)
-    const availableMinutes = 7 * 8 * 60;
-    const workloadPercentage = Math.min((totalMinutes / availableMinutes) * 100, 100);
-
-    workloadFill.style.width = workloadPercentage + '%';
-    workloadText.textContent = `Workload: ${workloadPercentage.toFixed(0)}%`;
 }
 
 // Show notification
