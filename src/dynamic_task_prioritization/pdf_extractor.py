@@ -74,3 +74,27 @@ class GeminiPDFExtractor:
         )
 
         return response.text
+        
+    def analyze_text_content(self, text_content: str, extraction_prompt: str) -> str:
+        """
+        Analyze raw text content using Gemini API.
+
+        Args:
+            text_content: Raw text description of the task
+            extraction_prompt: Prompt for analysis
+
+        Returns:
+            Analysis result from Gemini API
+        """
+        print(f"Sending text content to {GEMINI_MODEL}...")
+
+        # Combine Text + Prompt
+        contents = [text_content, extraction_prompt]
+
+        # Call Gemini API
+        response = self.client.models.generate_content(
+            model=GEMINI_MODEL,
+            contents=contents
+        )
+
+        return response.text

@@ -53,7 +53,7 @@ class AdaptiveTimeEstimator:
         self.threshold = 0.65
         self.top_k = 5
         
-        print("✅ Estimator ready!")
+        print(" Estimator ready!")
     
     
     def text_to_vector(self, text):

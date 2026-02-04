@@ -23,25 +23,42 @@
         <!-- Main Content -->
         <div class="main-content">
             <div class="page-header">
-                <h2>PDF Task Analysis</h2>
-                <p>Upload your assignment PDF and enter details for priority calculation</p>
+                <h2>Task Analysis</h2>
+                <p>Upload a PDF or paste text to calculate task priority</p>
             </div>
 
-            <!-- PDF Upload Section -->
+            <!-- Input Method Tabs -->
+            <div class="tabs">
+                <button class="tab-link active" data-tab="pdfTab">PDF Upload</button>
+                <button class="tab-link" data-tab="textTab">Direct Text</button>
+            </div>
+
+            <!-- Input Section -->
             <div class="card">
                 <div class="card-header">
-                    <h3>Step 1: Upload PDF Assignment</h3>
+                    <h3>Step 1: Provide Task Content</h3>
                 </div>
                 <div class="card-body">
-                    <div class="upload-area" id="uploadArea">
-                        <div class="upload-icon">📄</div>
-                        <p class="upload-text">Drag and drop your PDF here or click to browse</p>
-                        <input type="file" id="pdfInput" accept=".pdf" hidden>
-                        <button class="btn btn-primary" id="browseBtn">Browse Files</button>
+                    <!-- PDF Tab Content -->
+                    <div id="pdfTab" class="tab-content active">
+                        <div class="upload-area" id="uploadArea">
+                            <div class="upload-icon">📄</div>
+                            <p class="upload-text">Drag and drop your PDF here or click to browse</p>
+                            <input type="file" id="pdfInput" accept=".pdf" hidden>
+                            <button class="btn btn-primary" id="browseBtn">Browse Files</button>
+                        </div>
+                        <div class="file-info" id="fileInfo" style="display: none;">
+                            <div class="file-name" id="fileName"></div>
+                            <button class="btn btn-secondary btn-sm" id="removeFileBtn">Remove</button>
+                        </div>
                     </div>
-                    <div class="file-info" id="fileInfo" style="display: none;">
-                        <div class="file-name" id="fileName"></div>
-                        <button class="btn btn-secondary btn-sm" id="removeFileBtn">Remove</button>
+
+                    <!-- Text Tab Content -->
+                    <div id="textTab" class="tab-content">
+                        <div class="text-input-area">
+                            <textarea id="textContent" class="form-control" rows="8" placeholder="Paste your assignment instructions, email content, or task description here..."></textarea>
+                            <small class="form-text">Paste the full text of your task for Gemini to analyze.</small>
+                        </div>
                     </div>
                 </div>
             </div>

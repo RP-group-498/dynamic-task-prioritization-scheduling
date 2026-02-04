@@ -102,6 +102,7 @@ class DifficultyPredictor:
             print(f"\nDifficulty Rating: {difficulty_label} (Score: {difficulty_score}/5)")
             print(f"Prediction Class: {prediction_class}")
             print(f"Confidence: {confidence:.1f}%")
+
             print(f"\nProbabilities:")
             print(f"  Easy   (1/5): {probabilities[0]:.1%} (Class 0)")
             print(f"  Medium (3/5): {probabilities[1]:.1%} (Class 1)")

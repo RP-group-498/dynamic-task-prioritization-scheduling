@@ -19,6 +19,7 @@ const analyzeSpinner = document.getElementById('analyzeSpinner');
 const resultsCard = document.getElementById('resultsCard');
 
 let selectedFile = null;
+let currentInputMode = 'pdf';
 let currentTaskData = null;
 let isEditMode = false;
 let hasUnsavedChanges = false;
@@ -40,7 +41,8 @@ function formatTime(minutes) {
     } else if (hours > 0) {
         const hourStr = hours === 1 ? "hour" : "hours";
         return `${hours} ${hourStr}`;
-    } else {
+    }
+    else {
         const minStr = mins === 1 ? "minute" : "minutes";
         return `${mins} ${minStr}`;
     }
@@ -73,6 +75,27 @@ function setupNavigation() {
 
 // Setup Event Listeners
 function setupEventListeners() {
+    // Tab switching
+    const tabLinks = document.querySelectorAll('.tab-link');
+    tabLinks.forEach(link => {
+        link.addEventListener('click', () => {
+            const tabId = link.getAttribute('data-tab');
+            
+            // Update active link
+            tabLinks.forEach(l => l.classList.remove('active'));
+            link.classList.add('active');
+            
+            // Update active content
+            document.querySelectorAll('.tab-content').forEach(content => {
+                content.classList.remove('active');
+            });
+            document.getElementById(tabId).classList.add('active');
+            
+            // Update mode
+            currentInputMode = tabId === 'pdfTab' ? 'pdf' : 'text';
+        });
+    });
+
     // Browse button
     browseBtn.addEventListener('click', () => {
         pdfInput.click();
@@ -148,27 +171,40 @@ function clearFileSelection() {
 
 // Analyze task
 async function analyzeTask() {
-    if (!selectedFile) {
-        showNotification('Please select a PDF file', 'error');
-        return;
+    let analysisData = {
+        deadline: document.getElementById('deadline').value,
+        credits: parseInt(document.getElementById('credits').value),
+        weight: parseInt(document.getElementById('weight').value)
+    };
+
+    // Input-specific validation
+    if (currentInputMode === 'pdf') {
+        if (!selectedFile) {
+            showNotification('Please select a PDF file', 'error');
+            return;
+        }
+        analysisData.pdfPath = selectedFile.path;
+    } else {
+        const textContent = document.getElementById('textContent').value.trim();
+        if (!textContent) {
+            showNotification('Please paste your task content', 'error');
+            return;
+        }
+        analysisData.textContent = textContent;
     }
 
-    const deadline = document.getElementById('deadline').value;
-    const credits = parseInt(document.getElementById('credits').value);
-    const weight = parseInt(document.getElementById('weight').value);
-
-    // Validate inputs
-    if (!deadline || !credits || !weight) {
+    // Common validation
+    if (!analysisData.deadline || !analysisData.credits || !analysisData.weight) {
         showNotification('Please fill in all fields', 'error');
         return;
     }
 
-    if (credits < 1 || credits > 4) {
+    if (analysisData.credits < 1 || analysisData.credits > 4) {
         showNotification('Credits must be between 1 and 4', 'error');
         return;
     }
 
-    if (weight < 0 || weight > 100) {
+    if (analysisData.weight < 0 || analysisData.weight > 100) {
         showNotification('Weight must be between 0 and 100', 'error');
         return;
     }
@@ -183,13 +219,8 @@ async function analyzeTask() {
     isEditMode = false;
 
     try {
-        // Step 1: Analyze PDF to extract subtasks
-        const result = await ipcRenderer.invoke('analyze-pdf', {
-            pdfPath: selectedFile.path,
-            deadline: deadline,
-            credits: credits,
-            weight: weight
-        });
+        // Step 1: Analyze content (PDF or Text) to extract subtasks
+        const result = await ipcRenderer.invoke('analyze-pdf', analysisData);
 
         if (result && result.tasks && result.tasks.length > 0) {
             const taskData = result.tasks[0];
@@ -200,16 +231,14 @@ async function analyzeTask() {
 
             displayResults(taskData);
 
-            // Note: Tasks are no longer automatically saved.
-            // Users can adjust times using sliders and manually save using "Save All Tasks" button
-
             showNotification('Analysis completed successfully! You can now adjust times and save.', 'success');
         } else {
             throw new Error('No results returned from analysis');
         }
     } catch (error) {
         console.error('Analysis error:', error);
-        showNotification('Failed to analyze PDF. Please try again.', 'error');
+        const source = currentInputMode === 'pdf' ? 'PDF' : 'text content';
+        showNotification(`Failed to analyze ${source}. Please try again.`, 'error');
     } finally {
         setLoadingState(false);
     }
