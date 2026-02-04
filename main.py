@@ -141,6 +141,10 @@ def main():
     parser.add_argument('--input', type=str, help='Path to input JSON file (for Electron frontend)')
     args = parser.parse_args()
 
+    input_mode = "pdf"  # Default mode
+    pdf_file = None
+    text_content = None
+
     # Check if running in automated mode (from Electron) or manual mode
     if args.input:
         # AUTOMATED MODE: Read from JSON input file (from frontend)
@@ -151,7 +155,14 @@ def main():
             with open(args.input, 'r', encoding='utf-8') as f:
                 input_data = json.load(f)
 
-            pdf_file = Path(input_data['pdf_path'])
+            # Determine input mode from automated request
+            if 'text_content' in input_data and input_data['text_content']:
+                input_mode = "text"
+                text_content = input_data['text_content']
+            else:
+                input_mode = "pdf"
+                pdf_file = Path(input_data['pdf_path'])
+
             deadline_input = input_data['deadline']
             credits = int(input_data['credits'])
             weight = int(input_data['weight'])
@@ -162,7 +173,13 @@ def main():
             days_left = (deadline_date - today).days
 
             print(f"\nRequest Parameters:")
-            print(f"  PDF File: {pdf_file.name}")
+            if input_mode == "pdf":
+                print(f"  Input Mode: PDF File")
+                print(f"  File: {pdf_file.name}")
+            else:
+                print(f"  Input Mode: Direct Text")
+                print(f"  Text Length: {len(text_content)} characters")
+            
             print(f"  Deadline: {deadline_input} ({days_left} days left)")
             print(f"  Credits: {credits}")
             print(f"  Weight: {weight}%")
@@ -179,11 +196,37 @@ def main():
         print("MCDM Task Priority Analysis System")
         print("=" * 60)
 
-        # Get user inputs
+        # Get user inputs for MCDM
         deadline_date, credits, weight, days_left, deadline_input = get_user_inputs()
 
-        # Get PDF file
-        pdf_file = get_pdf_file()
+        # Select input method
+        print("\n--- INPUT METHOD ---")
+        print("1. Analyze PDF File")
+        print("2. Paste Direct Text Content")
+        
+        while True:
+            mode_choice = input("\nSelect input method (1-2): ").strip()
+            if mode_choice == "1":
+                input_mode = "pdf"
+                pdf_file = get_pdf_file()
+                break
+            elif mode_choice == "2":
+                input_mode = "text"
+                print("\nPaste your task description/content below (Press Enter then Ctrl+Z and Enter on Windows, or Ctrl+D on Linux to finish):")
+                lines = []
+                try:
+                    while True:
+                        line = input()
+                        lines.append(line)
+                except EOFError:
+                    text_content = "\n".join(lines)
+                
+                if not text_content.strip():
+                    print("Error: Text content cannot be empty.")
+                    continue
+                break
+            else:
+                print("Error: Please enter 1 or 2.")
 
     # Initialize Gemini extractor
     try:
@@ -205,11 +248,15 @@ def main():
         today_date_str=today_date_str
     )
 
-    # Step 1: Extract content from PDF using Gemini
+    # Step 1: Extract content using Gemini
     try:
         print("\n" + "=" * 60)
-        print("Step 1: Extracting content from PDF using Gemini API...")
-        extracted_json = extractor.extract_text_from_pdf(str(pdf_file), prompt)
+        if input_mode == "pdf":
+            print(f"Step 1: Extracting content from PDF ({pdf_file.name}) using Gemini API...")
+            extracted_json = extractor.extract_text_from_pdf(str(pdf_file), prompt)
+        else:
+            print(f"Step 1: Analyzing direct text content using Gemini API...")
+            extracted_json = extractor.analyze_text_content(text_content, prompt)
 
         # Parse JSON response
         try:
@@ -288,39 +335,54 @@ def main():
         print(f"\nScores:")
         print(f"  Urgency Score:    {urgency_score}/100  ({days_left} days left)")
         print(f"  Impact Score:     {impact_score}/100  ({credits} credits × {weight}%)")
-        print(f"  Difficulty Score: {difficulty_score}/100  (ML rating: {difficulty_rating}/5)")
+        print(f"  Difficulty Score: {difficulty_score}/100  (ML Prediction: {difficulty_rating}/5)")
         print(f"\n  Final MCDM Score: {final_score:.1f}/100")
         print(f"  Priority Level:   {priority_label}")
         print(f"{'='*80}")
 
         # Step 4: Build final output JSON
+        # Convert numpy types to Python native types for JSON serialization
+        import numpy as np
+
+        def convert_to_native(obj):
+            """Convert numpy types to Python native types"""
+            if isinstance(obj, (np.integer, np.floating)):
+                return obj.item()
+            elif isinstance(obj, np.ndarray):
+                return obj.tolist()
+            elif isinstance(obj, dict):
+                return {key: convert_to_native(value) for key, value in obj.items()}
+            elif isinstance(obj, list):
+                return [convert_to_native(item) for item in obj]
+            return obj
+
         task_data = {
             "task_name": extracted_data.get("task_name", "Unknown Task"),
             "task_description": extracted_data.get("task_description", ""),
             "sub_tasks": extracted_data.get("sub_tasks", []),
             "context": extracted_data.get("context", ""),
             "ai_suggestions": {
-                "ai_suggested_difficulty": extracted_data.get("ai_suggested_difficulty"),
-                "ai_suggested_time": extracted_data.get("ai_suggested_time")
+                "ai_suggested_difficulty": int(extracted_data.get("ai_suggested_difficulty")) if extracted_data.get("ai_suggested_difficulty") is not None else None,
+                "ai_suggested_time": float(extracted_data.get("ai_suggested_time")) if extracted_data.get("ai_suggested_time") is not None else None
             },
             "metrics": {
                 "deadline": deadline_input,
-                "days_left": days_left,
-                "credits": credits,
-                "percentage": weight,
-                "difficulty_rating": difficulty_rating
+                "days_left": int(days_left),
+                "credits": int(credits),
+                "percentage": int(weight),
+                "difficulty_rating": int(difficulty_rating)
             },
             "mcdm_calculation": {
-                "urgency_score": urgency_score,
-                "impact_score": impact_score,
-                "difficulty_score": difficulty_score,
-                "final_weighted_score": round(final_score, 2)
+                "urgency_score": float(urgency_score),
+                "impact_score": float(impact_score),
+                "difficulty_score": float(difficulty_score),
+                "final_weighted_score": float(round(final_score, 2))
             },
             "priority": priority_label
         }
 
         final_output = {
-            "tasks": [task_data]
+            "tasks": [convert_to_native(task_data)]
         }
 
         # Step 5: Save results

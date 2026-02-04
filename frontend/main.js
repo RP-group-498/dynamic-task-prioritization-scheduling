@@ -61,7 +61,8 @@ ipcMain.handle('analyze-pdf', async (event, data) => {
     // Create input file for Python script
     const fs = require('fs');
     const inputData = {
-      pdf_path: data.pdfPath,
+      pdf_path: data.pdfPath || '',
+      text_content: data.textContent || '',
       deadline: data.deadline,
       credits: data.credits,
       weight: data.weight
