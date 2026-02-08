@@ -174,6 +174,7 @@ class AdaptiveTimeEstimator:
                     "actual_time": None,
                     "confidence": pred['confidence']
                 },
+                "final_mcdm_score": main_task.get('final_mcdm_score'), # Add final_mcdm_score directly
                 "status": "scheduled",
                 "created_date": datetime.now(),
                 "time_allocation_date": pred.get('time_allocation_date', None)
@@ -184,7 +185,7 @@ class AdaptiveTimeEstimator:
     
     def mark_complete(self, subtask_desc, user_id, actual_time):
         """Mark task as complete"""
-        self.tasks.update_one(
+        result = self.tasks.update_one(
             {
                 "user_id": user_id,
                 "sub_task.description": subtask_desc,
@@ -198,6 +199,7 @@ class AdaptiveTimeEstimator:
                 }
             }
         )
+        return result.modified_count == 1
     
     
     def get_accuracy(self, user_id):

@@ -91,6 +91,26 @@ function setupEventListeners() {
             taskModal.style.display = 'none';
         }
     });
+
+    // Event delegation for Mark Complete buttons in Todo List
+    todoList.addEventListener('click', (e) => {
+        if (e.target.classList.contains('mark-complete-btn')) {
+            const subtaskDescription = e.target.dataset.subtaskDescription;
+            if (subtaskDescription) {
+                markTaskComplete(subtaskDescription);
+            }
+        }
+    });
+
+    // Event delegation for Mark Complete buttons in Modal Task List
+    modalTaskList.addEventListener('click', (e) => {
+        if (e.target.classList.contains('mark-complete-btn')) {
+            const subtaskDescription = e.target.dataset.subtaskDescription;
+            if (subtaskDescription) {
+                markTaskComplete(subtaskDescription);
+            }
+        }
+    });
 }
 
 // Load tasks from API
@@ -286,6 +306,7 @@ function createModalTaskElement(task) {
     taskItem.innerHTML = `
         <div class="modal-task-header">
             <div class="modal-task-title">${task.name}</div>
+            <button class="btn-sm btn-primary mark-complete-btn" data-subtask-description="${task.name}">Mark Complete</button>
             ${statusBadge}
         </div>
         ${task.description ? `<div class="modal-task-description"><strong>Main Task:</strong> ${task.description}</div>` : ''}
@@ -382,6 +403,7 @@ function createTodoElement(task) {
     todoItem.innerHTML = `
         <div class="todo-header">
             <div class="todo-title">${task.name}</div>
+            <button class="btn-sm btn-primary mark-complete-btn" data-subtask-description="${task.name}">Mark Complete</button>
         </div>
         <div class="todo-meta">
             <div class="todo-meta-item">
@@ -404,6 +426,49 @@ function createTodoElement(task) {
     `;
 
     return todoItem;
+}
+
+// Mark task as complete
+async function markTaskComplete(subtaskDescription) {
+    // Electron does not support window.prompt(), hardcoding for now.
+    // A proper UI element (e.g., a custom modal input) should be implemented here.
+    let actualTime = 30; // Default actual time for testing
+    if (isNaN(actualTime) || actualTime < 0) {
+        showNotification('Invalid time entered. Task not marked complete.', 'error');
+        return;
+    }
+
+    try {
+        const response = await fetch(`${API_BASE_URL}/complete`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                subtask: subtaskDescription, // Sending subtask description
+                user_id: USER_ID,
+                actual_time: actualTime
+            }),
+        });
+
+        const result = await response.json();
+
+        if (response.ok) { // This means status code was 2xx
+            showNotification(`Task marked complete: ${result.message}`, 'success');
+            loadTasksFromAPI(); // Refresh tasks to update UI
+        } else { // This means status code was not 2xx, e.g., 404 from our change
+            // Check for specific error message from our backend
+            if (result.status === "failed" && result.message) {
+                showNotification(`Failed to mark task complete: ${result.message}`, 'error');
+            } else {
+                // Generic error for other backend issues
+                throw new Error(result.message || 'Failed to mark task complete');
+            }
+        }
+    } catch (error) {
+        console.error('Error marking task complete:', error);
+        showNotification(`Error marking task complete: ${error.message}`, 'error');
+    }
 }
 
 // Format date

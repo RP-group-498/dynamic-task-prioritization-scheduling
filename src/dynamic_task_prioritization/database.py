@@ -258,7 +258,8 @@ class MongoDBHandler:
             high_priority = self.tasks_collection.count_documents({"priority": "High"})
             medium_priority = self.tasks_collection.count_documents({"priority": "Medium"})
             low_priority = self.tasks_collection.count_documents({"priority": "Low"})
-
+            completed_tasks = self.tasks_collection.count_documents({"status": "completed"})
+            
             return {
                 "total_tasks": total,
                 "high_priority": high_priority,
@@ -270,7 +271,9 @@ class MongoDBHandler:
             print(f"Error getting statistics: {e}")
             return {}
 
-    def close(self):
+
+
+    def close(self) -> None:
         """Close MongoDB connection."""
         if self.client:
             self.client.close()

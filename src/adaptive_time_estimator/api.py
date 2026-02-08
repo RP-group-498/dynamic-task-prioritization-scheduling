@@ -24,6 +24,8 @@ from bson.objectid import ObjectId
 import os
 from dotenv import load_dotenv
 
+
+
 app = Flask(__name__)
 CORS(app)  # Enable CORS for frontend access
 
@@ -41,6 +43,7 @@ apdis_client = MongoClient(os.getenv('APDIS_MONGODB_URI'))
 apdis_db = apdis_client[os.getenv('APDIS_DATABASE_NAME')]
 active_time_collection = apdis_db[os.getenv('APDIS_COLLECTION_ACTIVE_TIME')]
 print("APDIS database connected!")
+
 
 
 @app.route('/', methods=['GET'])
@@ -205,17 +208,24 @@ def complete():
     try:
         data = request.json
         
-        estimator.mark_complete(
+        task_marked = estimator.mark_complete(
             data['subtask'],
             data['user_id'],
             data['actual_time']
         )
         
-        return jsonify({
-            "status": "completed",
-            "message": "Task marked as complete and model updated",
-            "timestamp": datetime.now().isoformat()
-        })
+        if task_marked:
+            return jsonify({
+                "status": "completed",
+                "message": "Task marked as complete and model updated",
+                "timestamp": datetime.now().isoformat()
+            })
+        else:
+            return jsonify({
+                "status": "failed",
+                "message": "Task not found or not in 'scheduled' status.",
+                "timestamp": datetime.now().isoformat()
+            }), 404 # Not Found
         
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -693,7 +703,7 @@ def get_active_time_by_user(user_id):
         total_minutes = 0
         for pred in predictions:
             pred['_id'] = str(pred['_id'])
-            total_minutes += pred.get('predictedAcademicMinutes', 0)
+            total_minutes += int(pred.get('predictedAcademicMinutes') or 0)
 
         return jsonify({
             "user_id": user_id,
