@@ -469,18 +469,32 @@ function displayResults(task) {
             subtasksList.appendChild(totalLi);
         }
 
-        // Show action buttons
-        const actionsDiv = document.getElementById('subtasksActions');
-        actionsDiv.style.display = 'flex';
-
-        // If already saved, hide the "Adjust Times" button
-        if (hasBeenSaved) {
-            const adjustTimesBtn = document.getElementById('adjustTimesBtn');
-            if (adjustTimesBtn) {
-                adjustTimesBtn.style.display = 'none';
-            }
-        }
-    } else {
+                    // Show action buttons container
+                    const actionsDiv = document.getElementById('subtasksActions');
+                    if (actionsDiv) {
+                        actionsDiv.style.display = 'flex';
+                    }
+        
+                    const adjustTimesBtn = document.getElementById('adjustTimesBtn');
+                    if (adjustTimesBtn) {
+                        // Explicitly show the button first to override any default hidden state
+                        adjustTimesBtn.style.display = 'inline-block'; // Default display for a button
+        
+                        // Then, if the task has already been saved, hide it
+                        if (hasBeenSaved) {
+                            adjustTimesBtn.style.display = 'none';
+                        }
+                    }
+        
+                    // Ensure save and cancel buttons are hidden initially for a fresh display
+                    const saveAllTasksBtn = document.getElementById('saveAllTasksBtn');
+                    if (saveAllTasksBtn) {
+                        saveAllTasksBtn.style.display = 'none';
+                    }
+                    const cancelEditBtn = document.getElementById('cancelEditBtn');
+                    if (cancelEditBtn) {
+                        cancelEditBtn.style.display = 'none';
+                    }    } else {
         subtasksList.innerHTML = '<li>No subtasks available</li>';
         document.getElementById('subtasksActions').style.display = 'none';
     }
