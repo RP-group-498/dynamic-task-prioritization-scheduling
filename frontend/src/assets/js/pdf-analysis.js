@@ -730,16 +730,6 @@ async function saveAllTasks() {
         return;
     }
 
-    // Validate time ranges
-    const sliders = document.querySelectorAll('.time-slider');
-    for (const slider of sliders) {
-        const value = parseInt(slider.value);
-        if (value < 10 || value > 480) {
-            showNotification('Time values must be between 10 and 480 minutes', 'error');
-            return;
-        }
-    }
-
     // Prepare predictions data
     const predictions = currentTaskData.sub_tasks.map((subtask, index) => {
         const userSelectedTime = subtask.user_selected_minutes || subtask.estimated_minutes;
