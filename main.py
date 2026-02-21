@@ -320,7 +320,20 @@ def main():
         print("STEP 2: ML-BASED DIFFICULTY PREDICTION")
         print(f"{'='*80}")
         task_description = extracted_data.get("task_description", "")
-        difficulty_rating = predictor.predict_difficulty(task_description)
+        ml_difficulty, ml_confidence = predictor.predict_difficulty(task_description)
+
+        # Hybrid Decision: Use AI difficulty if ML confidence < 50%
+        ai_suggested_difficulty = int(extracted_data.get("ai_suggested_difficulty", 3))
+        
+        if ml_confidence < 50:
+            print(f"  [HYBRID DECISION] ML Confidence ({ml_confidence:.1f}%) is low.")
+            print(f"  Falling back to AI Suggested Difficulty: {ai_suggested_difficulty}/5")
+            difficulty_rating = ai_suggested_difficulty
+            difficulty_method = f"AI Suggested (ML Confidence: {ml_confidence:.1f}%)"
+        else:
+            print(f"  [HYBRID DECISION] Using ML Prediction (Confidence: {ml_confidence:.1f}%)")
+            difficulty_rating = ml_difficulty
+            difficulty_method = "ML Prediction (High Confidence)"
 
         # Step 3: Calculate MCDM scores
         print(f"\n{'='*80}")
@@ -335,7 +348,8 @@ def main():
         print(f"\nScores:")
         print(f"  Urgency Score:    {urgency_score}/100  ({days_left} days left)")
         print(f"  Impact Score:     {impact_score}/100  ({credits} credits × {weight}%)")
-        print(f"  Difficulty Score: {difficulty_score}/100  (ML Prediction: {difficulty_rating}/5)")
+        print(f"  Difficulty Score: {difficulty_score}/100  (Method: {difficulty_method})")
+        print(f"  Final Difficulty: {difficulty_rating}/5")
         print(f"\n  Final MCDM Score: {final_score:.1f}/100")
         print(f"  Priority Level:   {priority_label}")
         print(f"{'='*80}")

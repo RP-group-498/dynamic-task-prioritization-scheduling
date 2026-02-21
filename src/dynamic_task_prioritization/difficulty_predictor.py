@@ -66,7 +66,7 @@ class DifficultyPredictor:
             'dataset_info': model_dict.get('dataset_info', {})
         }
 
-    def predict_difficulty(self, task_description: str, fallback: int = 3) -> int:
+    def predict_difficulty(self, task_description: str, fallback: int = 3) -> tuple[int, float]:
         """
         Predict difficulty rating from task description text using v2 model.
 
@@ -75,11 +75,11 @@ class DifficultyPredictor:
             fallback: Default difficulty if model not loaded (1-5)
 
         Returns:
-            Difficulty rating on 1-5 scale (1=Easy, 3=Medium, 5=Hard)
+            Tuple of (difficulty_rating (1-5), confidence_percentage (0-100))
         """
         if not self.loaded or not task_description.strip():
             print(f"  > Using fallback difficulty: {fallback}")
-            return fallback
+            return fallback, 0.0
 
         try:
             # Step 1: Encode text using Sentence Transformer
@@ -109,11 +109,11 @@ class DifficultyPredictor:
             print(f"  Hard   (5/5): {probabilities[2]:.1%} (Class 2)")
             print("="*80 + "\n")
 
-            return difficulty_score
+            return difficulty_score, float(confidence)
 
         except Exception as e:
             print(f"Error during prediction: {e}")
             import traceback
             traceback.print_exc()
             print(f"  > Using fallback difficulty: {fallback}")
-            return fallback
+            return fallback, 0.0
