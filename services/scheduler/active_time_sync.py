@@ -30,7 +30,38 @@ logging.basicConfig(
 # Configuration - can be moved to .env later
 API_BASE_URL = os.getenv("API_BASE_URL", "http://localhost:5000")
 USERS_TO_SYNC = ["user_003", "user_001"]
-SCHEDULE_TIME = "19:23"
+SCHEDULE_TIME = "11:57"
+
+def allocate_user_tasks(student_id, active_time_id, start_date="2026-01-04", days_ahead=90):
+    """
+    Triggers task allocation for a student based on their active time.se
+    """
+    url = f"{API_BASE_URL}/allocate-tasks/{student_id}"
+    payload = {
+        "active_time_user_id": active_time_id,
+        "start_date": start_date,
+        "days_ahead": days_ahead
+    }
+    
+    logging.info(f"--- TRIGGERING TASK ALLOCATION FOR {student_id} ---")
+    logging.info(f"Target URL: {url} | Payload: {payload}")
+    
+    try:
+        # Use a POST request with the specified payload
+        response = requests.post(url, json=payload, timeout=60)
+        
+        if response.status_code == 200:
+            data = response.json()
+            allocated = data.get('allocated_tasks', 0)
+            unallocated = data.get('unallocated_tasks', 0)
+            logging.info(f"✔ ALLOCATION SUCCESS: {student_id} | Allocated: {allocated}, Unallocated: {unallocated}")
+            return True
+        else:
+            logging.error(f"❌ ALLOCATION FAILED: {student_id} | Status: {response.status_code} | Reason: {response.text[:200]}")
+            return False
+    except Exception as e:
+        logging.error(f"❌ ALLOCATION ERROR: {str(e)}")
+        return False
 
 def fetch_active_time():
     """Fetches active time data for configured users."""
@@ -61,9 +92,14 @@ def fetch_active_time():
                         start = p.get('predictedActiveStart', 'N/A')
                         end = p.get('predictedActiveEnd', 'N/A')
                         mins = p.get('predictedAcademicMinutes', 0)
-                        logging.info(f"     📅 {date} ({day}): {start} - {end} | ⏱ {mins} mins")
+                        logging.info(f"  {date} ({day}): {start} - {end} | ⏱ {mins} mins")
                 
                 success_count += 1
+
+                # If user_003 is synced, trigger allocation for student_123
+                if user_id == "user_003":
+                    allocate_user_tasks("student_123", "user_003")
+
             else:
                 logging.warning(f" FAILED: {user_id} | Status: {response.status_code} | Reason: {response.text[:100]}")
                 fail_count += 1

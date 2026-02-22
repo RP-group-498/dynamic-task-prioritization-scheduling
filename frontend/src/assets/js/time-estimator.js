@@ -294,6 +294,7 @@ function createModalTaskElement(task) {
     const estimatedTime = task.user_estimate || task.predicted_time;
     const timeStr = formatTime(estimatedTime);
     const statusBadge = getStatusBadge(task.status);
+    const isCompleted = task.status === 'completed';
 
     // Show active time window if available
     const activeWindowHtml = task.predictedActiveStart && task.predictedActiveEnd ? `
@@ -306,7 +307,10 @@ function createModalTaskElement(task) {
     taskItem.innerHTML = `
         <div class="modal-task-header">
             <div class="modal-task-title">${task.name}</div>
-            <button class="btn-sm btn-primary mark-complete-btn" data-subtask-description="${task.name}">Mark Complete</button>
+            ${isCompleted 
+                ? '<button class="btn-sm btn-success" disabled style="background-color: #10b981; border: none; color: white; cursor: default;">Completed</button>' 
+                : `<button class="btn-sm btn-primary mark-complete-btn" data-subtask-description="${task.name}">Mark Complete</button>`
+            }
             ${statusBadge}
         </div>
         ${task.description ? `<div class="modal-task-description"><strong>Main Task:</strong> ${task.description}</div>` : ''}
@@ -391,6 +395,8 @@ function createTodoElement(task) {
     const allocationDate = task.time_allocation_date
         ? formatDate(task.time_allocation_date.split('T')[0])
         : 'Not scheduled';
+    
+    const isCompleted = task.status === 'completed';
 
     // Show active time window if available
     const activeWindowInfo = task.predictedActiveStart && task.predictedActiveEnd ? `
@@ -403,7 +409,10 @@ function createTodoElement(task) {
     todoItem.innerHTML = `
         <div class="todo-header">
             <div class="todo-title">${task.name}</div>
-            <button class="btn-sm btn-primary mark-complete-btn" data-subtask-description="${task.name}">Mark Complete</button>
+            ${isCompleted 
+                ? '<button class="btn-sm btn-success" disabled style="background-color: #10b981; border: none; color: white; cursor: default;">Completed</button>' 
+                : `<button class="btn-sm btn-primary mark-complete-btn" data-subtask-description="${task.name}">Mark Complete</button>`
+            }
         </div>
         <div class="todo-meta">
             <div class="todo-meta-item">
@@ -430,11 +439,23 @@ function createTodoElement(task) {
 
 // Mark task as complete
 async function markTaskComplete(subtaskDescription) {
-    // Electron does not support window.prompt(), hardcoding for now.
-    // A proper UI element (e.g., a custom modal input) should be implemented here.
+    // Find the button(s) and show loading state immediately
+    const buttons = document.querySelectorAll(`button[data-subtask-description="${subtaskDescription}"]`);
+    buttons.forEach(btn => {
+        btn.textContent = 'Updating...';
+        btn.disabled = true;
+        btn.style.opacity = '0.7';
+    });
+
     let actualTime = 30; // Default actual time for testing
     if (isNaN(actualTime) || actualTime < 0) {
         showNotification('Invalid time entered. Task not marked complete.', 'error');
+        // Reset buttons if failed
+        buttons.forEach(btn => {
+            btn.textContent = 'Mark Complete';
+            btn.disabled = false;
+            btn.style.opacity = '1';
+        });
         return;
     }
 
@@ -445,7 +466,7 @@ async function markTaskComplete(subtaskDescription) {
                 'Content-Type': 'application/json',
             },
             body: JSON.stringify({
-                subtask: subtaskDescription, // Sending subtask description
+                subtask: subtaskDescription,
                 user_id: USER_ID,
                 actual_time: actualTime
             }),
@@ -453,21 +474,74 @@ async function markTaskComplete(subtaskDescription) {
 
         const result = await response.json();
 
-        if (response.ok) { // This means status code was 2xx
-            showNotification(`Task marked complete: ${result.message}`, 'success');
-            loadTasksFromAPI(); // Refresh tasks to update UI
-        } else { // This means status code was not 2xx, e.g., 404 from our change
-            // Check for specific error message from our backend
-            if (result.status === "failed" && result.message) {
-                showNotification(`Failed to mark task complete: ${result.message}`, 'error');
-            } else {
-                // Generic error for other backend issues
-                throw new Error(result.message || 'Failed to mark task complete');
-            }
+        if (response.ok) {
+            showNotification(`Task marked complete!`, 'success');
+            
+            // Immediately update the UI before full refresh
+            buttons.forEach(btn => {
+                // Update Button
+                btn.textContent = 'Completed';
+                btn.className = 'btn-sm btn-success';
+                btn.style.backgroundColor = '#10b981';
+                btn.style.border = 'none';
+                btn.style.color = 'white';
+                btn.style.opacity = '1';
+                btn.style.cursor = 'default';
+
+                // Update Status Badge if it's in the same header
+                const header = btn.closest('.modal-task-header') || btn.closest('.todo-header');
+                if (header) {
+                    const statusBadge = header.querySelector('.status-badge');
+                    if (statusBadge) {
+                        statusBadge.textContent = 'Completed';
+                        statusBadge.className = 'status-badge completed';
+                    }
+                }
+            });
+
+            // Trigger data refresh
+            await loadTasksFromAPI();
+        } else {
+            // Reset buttons on error
+            buttons.forEach(btn => {
+                btn.textContent = 'Mark Complete';
+                btn.disabled = false;
+                btn.style.opacity = '1';
+            });
+            throw new Error(result.message || 'Failed to mark task complete');
         }
     } catch (error) {
         console.error('Error marking task complete:', error);
-        showNotification(`Error marking task complete: ${error.message}`, 'error');
+        showNotification(`Error: ${error.message}`, 'error');
+        // Reset buttons on error
+        buttons.forEach(btn => {
+            btn.textContent = 'Mark Complete';
+            btn.disabled = false;
+            btn.style.opacity = '1';
+        });
+    }
+}
+
+// Fetch available time from APDIS API
+async function updateAvailableTime() {
+    const availableTimeElement = document.getElementById('availableTime');
+    if (!availableTimeElement) return;
+
+    try {
+        // Using user_003 as it's the one linked to student_123 in scheduler
+        const response = await fetch(`${API_BASE_URL}/active-time/user/user_003`);
+        
+        if (!response.ok) throw new Error('Failed to fetch available time');
+        
+        const data = await response.json();
+        const totalMinutes = data.total_predicted_minutes || 0;
+        
+        availableTimeElement.textContent = formatTime(totalMinutes);
+        
+        // Update workload bar if needed (logic can be added here)
+    } catch (error) {
+        console.error('Error fetching available time:', error);
+        availableTimeElement.textContent = 'Unavailable';
     }
 }
 
